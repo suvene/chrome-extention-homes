@@ -34,6 +34,10 @@
   font-size: 14px;
 }
 
+.hc-import-file {
+  display: none;
+}
+
 .hc-panel {
   margin-top: 12px;
   padding: 10px 12px;
@@ -107,10 +111,6 @@
 .mod-newArrivalBuilding.hc-color-gray {
   box-shadow: inset 6px 0 0 #6b7280;
   background: #f3f4f6;
-}
-
-.mod-newArrivalBuilding.hc-hidden {
-  display: none !important;
 }
 
 .mod-newArrivalBuilding.hc-filtered-out {
