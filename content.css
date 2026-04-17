@@ -94,6 +94,10 @@
   color: #374151;
 }
 
+.kksearch.rentListPrDesign {
+  display: none !important;
+}
+
 .mod-newArrivalBuilding,
 tr.prg-roomRow {
   transition: opacity .18s ease, transform .18s ease, box-shadow .18s ease;

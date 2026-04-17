@@ -70,10 +70,15 @@ function checkRequiredPatterns() {
   console.log('Checking that required toolbar and storage hooks still exist...');
 
   const content = fs.readFileSync(contentPath, 'utf8');
+  const css = fs.readFileSync(cssPath, 'utf8');
   const missingPatterns = requiredPatterns.filter(pattern => !content.includes(pattern));
 
   if (missingPatterns.length > 0) {
     throw new Error(`Required pattern missing from content.js:\n${missingPatterns.join('\n')}`);
+  }
+
+  if (!css.includes('.kksearch.rentListPrDesign')) {
+    throw new Error('Required PR hidden selector is missing from content.css');
   }
 }
 
