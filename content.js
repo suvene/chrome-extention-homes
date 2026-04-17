@@ -538,6 +538,24 @@
     return isCondition1Room(card) ? getCondition1Rows(card) : [card];
   }
 
+  function getCondition1BuildingContainer(card) {
+    if (!isCondition1Room(card)) return null;
+
+    return (
+      card.closest('.mod-mergeBuilding--rent--photo')
+      || card.closest('.moduleInner.prg-building')
+    );
+  }
+
+  function syncCondition1BuildingVisibility(buildingContainers) {
+    buildingContainers.forEach(container => {
+      const hasVisibleRooms = [...container.querySelectorAll(CONDITION1_ROOM_SELECTOR)]
+        .some(room => !room.classList.contains('hc-filtered-out'));
+
+      container.classList.toggle('hc-building-filtered-out', !hasVisibleRooms);
+    });
+  }
+
   function applyState(card, state) {
     const decoratedElements = getDecoratedElements(card);
 
@@ -626,6 +644,8 @@
   }
 
   function filterCards() {
+    const buildingContainers = new Set();
+
     document.querySelectorAll(ITEM_SELECTOR).forEach(card => {
       const state = getResolvedState(card, getCardStorageIds(card).lookupIds).state;
       const isVisible = activeFilterValues.has(state.color);
@@ -633,7 +653,14 @@
       getDecoratedElements(card).forEach(element => {
         element.classList.toggle('hc-filtered-out', !isVisible);
       });
+
+      const buildingContainer = getCondition1BuildingContainer(card);
+      if (buildingContainer) {
+        buildingContainers.add(buildingContainer);
+      }
     });
+
+    syncCondition1BuildingVisibility(buildingContainers);
   }
 
   function syncPanel(card, state) {

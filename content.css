@@ -141,3 +141,7 @@ tr.prg-roomRow.hc-color-gray > td {
 tr.prg-roomRow.hc-filtered-out {
   display: none !important;
 }
+
+.hc-building-filtered-out {
+  display: none !important;
+}

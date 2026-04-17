@@ -23,6 +23,8 @@ $requiredPatterns = @(
   'function getRoomId',
   'function getTyKey',
   'function getPanelMountPoint',
+  'function getCondition1BuildingContainer',
+  'function syncCondition1BuildingVisibility',
   'function buildExportPayload',
   'function parseImportPayload',
   'async function exportJson',
