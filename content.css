@@ -16,6 +16,19 @@
   font-size: 14px;
 }
 
+.hc-filter-group {
+  display: flex;
+  gap: 10px 14px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.hc-filter-option {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+}
+
 .hc-toolbar button,
 .hc-toolbar select {
   font-size: 14px;
@@ -76,7 +89,7 @@
   background: #fff5f5;
 }
 
-.mod-newArrivalBuilding.hc-color-yellow {
+.mod-newArrivalBuilding.hc-color-orange {
   box-shadow: inset 6px 0 0 #f59e0b;
   background: #fffaf0;
 }
@@ -91,13 +104,13 @@
   background: #eff6ff;
 }
 
-.mod-newArrivalBuilding.hc-hidden {
-  display: none !important;
+.mod-newArrivalBuilding.hc-color-gray {
+  box-shadow: inset 6px 0 0 #6b7280;
+  background: #f3f4f6;
 }
 
-.hc-show-hidden .mod-newArrivalBuilding.hc-hidden {
-  display: block !important;
-  opacity: 0.35;
+.mod-newArrivalBuilding.hc-hidden {
+  display: none !important;
 }
 
 .mod-newArrivalBuilding.hc-filtered-out {
