@@ -11,20 +11,20 @@
   const EXPORT_FILENAME = 'homes-condition-notes.json';
   const STATUS_OPTIONS = [
     { value: '0', label: '0. 未検討', badgeLabel: '0. 未検討', colorClass: '', defaultChecked: true },
-    { value: '1', label: '1. 除外候補', badgeLabel: '1. 除外候補', colorClass: 'red', defaultChecked: true },
-    { value: '2', label: '2. 要確認', badgeLabel: '2. 要確認', colorClass: 'orange', defaultChecked: true },
-    { value: '3', label: '3. 検討中', badgeLabel: '3. 検討中', colorClass: 'green', defaultChecked: true },
-    { value: '4', label: '4. 本命', badgeLabel: '4. 本命', colorClass: 'blue', defaultChecked: true },
+    { value: '1', label: '1. 要確認', badgeLabel: '1. 要確認', colorClass: 'orange', defaultChecked: true },
+    { value: '2', label: '2. 検討中', badgeLabel: '2. 検討中', colorClass: 'green', defaultChecked: true },
+    { value: '3', label: '3. 本命', badgeLabel: '3. 本命', colorClass: 'blue', defaultChecked: true },
+    { value: '8', label: '8. 除外候補', badgeLabel: '8. 除外候補', colorClass: 'red', defaultChecked: true },
     { value: '9', label: '9. 除外', badgeLabel: '9. 除外', colorClass: 'gray', defaultChecked: false }
   ];
   const STATUS_VALUES = new Set(STATUS_OPTIONS.map(option => option.value));
   const LEGACY_STATUS_MAP = {
     '': '0',
-    red: '1',
-    yellow: '2',
-    orange: '2',
-    green: '4',
-    blue: '3',
+    red: '8',
+    yellow: '1',
+    orange: '1',
+    green: '3',
+    blue: '2',
     gray: '9'
   };
   const DEFAULT_FILTER_VALUES = new Set(
