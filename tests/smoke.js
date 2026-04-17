@@ -24,6 +24,9 @@ const requiredPatterns = [
   'function parseImportPayload',
   'async function exportJson',
   'async function importJson',
+  'const LOCAL_FILTER_STORAGE_KEY = \'homes_header_filter_v1\'',
+  'async function loadStoredFilterValues',
+  'async function persistFilterValues',
   'id="hc-export"',
   'id="hc-import"'
 ];
@@ -60,7 +63,7 @@ function checkLegacyHiddenReferences() {
 }
 
 function checkRequiredPatterns() {
-  console.log('Checking that JSON import/export controls still exist...');
+  console.log('Checking that required toolbar and storage hooks still exist...');
 
   const content = fs.readFileSync(contentPath, 'utf8');
   const missingPatterns = requiredPatterns.filter(pattern => !content.includes(pattern));
