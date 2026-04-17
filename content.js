@@ -1,6 +1,7 @@
 (() => {
   const LEGACY_STORAGE_KEY = 'homes_condition_notes_v1';
   const SYNC_KEY_PREFIX = 'homes_condition_note_v2:';
+  const LOCAL_FILTER_STORAGE_KEY = 'homes_header_filter_v1';
   const ITEM_SELECTOR = 'div.mod-newArrivalBuilding, tr.prg-roomInfo[data-kykey]';
   const CONDITION1_ROOM_SELECTOR = 'tr.prg-roomInfo[data-kykey]';
   const CONDITION1_BUNDLE_SELECTOR = '.prg-bundle';
@@ -37,7 +38,13 @@
   let isConditionListNextPageLoading = false;
 
   async function loadAll() {
-    cache = await migrateLegacyLocalData();
+    const [migratedCache, storedFilterValues] = await Promise.all([
+      migrateLegacyLocalData(),
+      loadStoredFilterValues()
+    ]);
+
+    cache = migratedCache;
+    activeFilterValues = storedFilterValues;
   }
 
   function getStorageKey(id) {
@@ -348,6 +355,29 @@
     return mergedStates;
   }
 
+  function normalizeStoredFilterValues(rawValues) {
+    if (!Array.isArray(rawValues)) {
+      return new Set(DEFAULT_FILTER_VALUES);
+    }
+
+    return new Set(
+      rawValues
+        .map(value => (typeof value === 'string' ? value : String(value)))
+        .filter(value => STATUS_VALUES.has(value))
+    );
+  }
+
+  async function loadStoredFilterValues() {
+    const stored = await chrome.storage.local.get(LOCAL_FILTER_STORAGE_KEY);
+    return normalizeStoredFilterValues(stored[LOCAL_FILTER_STORAGE_KEY]);
+  }
+
+  async function persistFilterValues() {
+    await chrome.storage.local.set({
+      [LOCAL_FILTER_STORAGE_KEY]: [...activeFilterValues]
+    });
+  }
+
   function normalizeIds(idsOrId) {
     if (Array.isArray(idsOrId)) {
       return [...new Set(idsOrId.filter(Boolean))];
@@ -526,7 +556,7 @@
             type="checkbox"
             class="hc-filter-checkbox"
             value="${option.value}"
-            ${option.defaultChecked ? 'checked' : ''}
+            ${activeFilterValues.has(option.value) ? 'checked' : ''}
           >
           ${option.label}
         </label>
@@ -803,6 +833,9 @@
             .filter(input => input.checked)
             .map(input => input.value)
         );
+        void persistFilterValues().catch(error => {
+          console.error('Failed to persist filter values', error);
+        });
         filterCards();
       });
     });
@@ -990,6 +1023,17 @@
   }
 
   function handleStorageChange(changes, areaName) {
+    if (areaName === 'local' && changes[LOCAL_FILTER_STORAGE_KEY]) {
+      activeFilterValues = normalizeStoredFilterValues(changes[LOCAL_FILTER_STORAGE_KEY].newValue);
+
+      document.querySelectorAll('.hc-filter-checkbox').forEach(checkbox => {
+        checkbox.checked = activeFilterValues.has(checkbox.value);
+      });
+
+      filterCards();
+      return;
+    }
+
     if (areaName !== 'sync') return;
 
     let shouldRefresh = false;
