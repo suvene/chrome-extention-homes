@@ -3,6 +3,7 @@
   const SYNC_KEY_PREFIX = 'homes_condition_note_v2:';
   const ITEM_SELECTOR = 'div.mod-newArrivalBuilding';
   const COMMENT_SAVE_DEBOUNCE_MS = 700;
+  const EXPORT_FILENAME = 'homes-condition-notes.json';
   const STATUS_OPTIONS = [
     { value: '0', label: '0. 未検討', badgeLabel: '0. 未検討', colorClass: '', defaultChecked: true },
     { value: '1', label: '1. 除外候補', badgeLabel: '1. 除外候補', colorClass: 'red', defaultChecked: true },
@@ -65,7 +66,6 @@
 
   function getDefaultState(card) {
     return {
-      hidden: false,
       color: '0',
       comment: '',
       title: getTitle(card),
@@ -84,7 +84,6 @@
     const updatedAt = Number(state?.updatedAt);
 
     return {
-      hidden: Boolean(state?.hidden),
       color: normalizeStatusValue(state?.color),
       comment: typeof state?.comment === 'string' ? state.comment : '',
       title: typeof state?.title === 'string' && state.title.trim() ? state.title : fallback.title,
@@ -103,8 +102,7 @@
   function statesEqual(left, right) {
     if (!left || !right) return false;
 
-    return left.hidden === right.hidden
-      && left.color === right.color
+    return left.color === right.color
       && left.comment === right.comment
       && left.title === right.title
       && left.updatedAt === right.updatedAt;
@@ -213,12 +211,93 @@
     await persistState(id);
   }
 
+  async function flushAllScheduledPersists() {
+    const ids = [...commentSaveTimers.keys()];
+    for (const id of ids) {
+      await flushScheduledPersist(id);
+    }
+  }
+
   function getExportableCache() {
     return Object.fromEntries(
       Object.entries(cache)
         .map(([id, rawState]) => [id, normalizeState(rawState)])
         .filter(([, state]) => !isDefaultState(state))
     );
+  }
+
+  function buildExportPayload() {
+    return {
+      schemaVersion: 1,
+      exportedAt: Date.now(),
+      states: getExportableCache()
+    };
+  }
+
+  function parseImportPayload(parsedJson) {
+    const rawStates =
+      parsedJson
+      && typeof parsedJson === 'object'
+      && !Array.isArray(parsedJson)
+      && parsedJson.schemaVersion === 1
+      && parsedJson.states
+      && typeof parsedJson.states === 'object'
+      && !Array.isArray(parsedJson.states)
+        ? parsedJson.states
+        : parsedJson;
+
+    if (!rawStates || typeof rawStates !== 'object' || Array.isArray(rawStates)) {
+      throw new Error('JSON format is invalid.');
+    }
+
+    return Object.fromEntries(
+      Object.entries(rawStates)
+        .filter(([id]) => typeof id === 'string' && id.trim())
+        .map(([id, rawState]) => [id, normalizeState(rawState)])
+        .filter(([, state]) => !isDefaultState(state))
+    );
+  }
+
+  function downloadJson(filename, payload) {
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = filename;
+    anchor.click();
+    URL.revokeObjectURL(url);
+  }
+
+  async function exportJson() {
+    await flushAllScheduledPersists();
+    downloadJson(EXPORT_FILENAME, buildExportPayload());
+  }
+
+  async function importJson(file) {
+    if (!file) return;
+
+    await flushAllScheduledPersists();
+
+    const text = await file.text();
+    const importedStates = parseImportPayload(JSON.parse(text));
+    const changedStates = {};
+
+    Object.entries(importedStates).forEach(([id, state]) => {
+      const mergedState = pickNewerState(cache[id], state);
+      if (!statesEqual(cache[id], mergedState)) {
+        cache[id] = mergedState;
+        changedStates[id] = mergedState;
+      }
+    });
+
+    if (Object.keys(changedStates).length === 0) {
+      window.alert('取り込める新しいステータスはありませんでした。');
+      return;
+    }
+
+    await writeStatesToSync(changedStates);
+    refreshAllCards();
+    window.alert(`${Object.keys(changedStates).length} 件のステータスをJSONから取り込みました。`);
   }
 
   function getStatusOption(value) {
@@ -247,27 +326,18 @@
       .join('');
   }
 
-  function isAutoHiddenStatus(state) {
-    return state.color === '9';
-  }
-
   function applyState(card, state) {
     card.classList.remove(
       'hc-color-red',
       'hc-color-orange',
       'hc-color-green',
       'hc-color-blue',
-      'hc-color-gray',
-      'hc-hidden'
+      'hc-color-gray'
     );
 
     const option = getStatusOption(state.color);
     if (option.colorClass) {
       card.classList.add(`hc-color-${option.colorClass}`);
-    }
-
-    if (isAutoHiddenStatus(state)) {
-      card.classList.add('hc-hidden');
     }
 
     const badge = card.querySelector('.hc-status-badge');
@@ -288,12 +358,16 @@
           ${renderFilterCheckboxes()}
         </div>
         <button type="button" id="hc-export">JSON書き出し</button>
+        <button type="button" id="hc-import">JSON読み込み</button>
+        <input type="file" id="hc-import-file" class="hc-import-file" accept="application/json,.json">
       </div>
     `;
     document.body.prepend(toolbar);
 
     const filterCheckboxes = toolbar.querySelectorAll('.hc-filter-checkbox');
     const exportBtn = toolbar.querySelector('#hc-export');
+    const importBtn = toolbar.querySelector('#hc-import');
+    const importFileInput = toolbar.querySelector('#hc-import-file');
 
     filterCheckboxes.forEach(checkbox => {
       checkbox.addEventListener('change', () => {
@@ -306,14 +380,30 @@
       });
     });
 
-    exportBtn.addEventListener('click', () => {
-      const blob = new Blob([JSON.stringify(getExportableCache(), null, 2)], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = 'homes-condition-notes.json';
-      a.click();
-      URL.revokeObjectURL(url);
+    exportBtn.addEventListener('click', async () => {
+      try {
+        await exportJson();
+      } catch (error) {
+        console.error('Failed to export JSON', error);
+        window.alert('JSON書き出しに失敗しました。');
+      }
+    });
+
+    importBtn.addEventListener('click', () => {
+      importFileInput.click();
+    });
+
+    importFileInput.addEventListener('change', async () => {
+      const [file] = importFileInput.files || [];
+
+      try {
+        await importJson(file);
+      } catch (error) {
+        console.error('Failed to import JSON', error);
+        window.alert('JSON読み込みに失敗しました。JSON形式を確認してください。');
+      } finally {
+        importFileInput.value = '';
+      }
     });
   }
 
