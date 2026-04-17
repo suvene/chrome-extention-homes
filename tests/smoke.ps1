@@ -19,6 +19,10 @@ if ($legacyMatches) {
 
 Write-Host 'Checking that JSON import/export controls still exist...'
 $requiredPatterns = @(
+  'const CONDITION1_ROOM_SELECTOR = ''tr.prg-roomInfo[data-kykey]''',
+  'function getRoomId',
+  'function getTyKey',
+  'function getPanelMountPoint',
   'function buildExportPayload',
   'function parseImportPayload',
   'async function exportJson',

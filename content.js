@@ -1,7 +1,8 @@
 (() => {
   const LEGACY_STORAGE_KEY = 'homes_condition_notes_v1';
   const SYNC_KEY_PREFIX = 'homes_condition_note_v2:';
-  const ITEM_SELECTOR = 'div.mod-newArrivalBuilding';
+  const ITEM_SELECTOR = 'div.mod-newArrivalBuilding, tr.prg-roomInfo[data-kykey]';
+  const CONDITION1_ROOM_SELECTOR = 'tr.prg-roomInfo[data-kykey]';
   const COMMENT_SAVE_DEBOUNCE_MS = 700;
   const EXPORT_FILENAME = 'homes-condition-notes.json';
   const STATUS_OPTIONS = [
@@ -46,22 +47,160 @@
     return key.slice(SYNC_KEY_PREFIX.length);
   }
 
-  function getBuildingId(card) {
+  function pushUnique(values, value) {
+    if (typeof value !== 'string') return;
+
+    const normalized = value.trim();
+    if (!normalized || values.includes(normalized)) return;
+    values.push(normalized);
+  }
+
+  function isCondition1Room(card) {
+    return card.matches(CONDITION1_ROOM_SELECTOR);
+  }
+
+  function getCondition1Rows(card) {
+    if (!isCondition1Room(card)) return [card];
+
+    const rows = [card];
+    let next = card.nextElementSibling;
+
+    while (next && next.matches('tr') && !next.matches(CONDITION1_ROOM_SELECTOR)) {
+      rows.push(next);
+      next = next.nextElementSibling;
+    }
+
+    return rows;
+  }
+
+  function parseRoomIdFromHref(href) {
+    if (typeof href !== 'string') return '';
+
+    const match = href.match(/\/chintai\/room\/([^/?#]+)\//);
+    return match?.[1] || '';
+  }
+
+  function getRoomId(card) {
+    const directKykey = card.dataset?.kykey;
+    if (directKykey) return directKykey;
+
+    const nestedKykey = card.querySelector('[data-kykey]')?.dataset?.kykey;
+    if (nestedKykey) return nestedKykey;
+
+    const directHrefId = parseRoomIdFromHref(card.dataset?.href);
+    if (directHrefId) return directHrefId;
+
+    const nestedHrefId = parseRoomIdFromHref(card.querySelector('[data-href]')?.dataset?.href);
+    if (nestedHrefId) return nestedHrefId;
+
+    const detailLinks = [
+      ...card.querySelectorAll('a[href*="/chintai/room/"]')
+    ];
+
+    for (const link of detailLinks) {
+      const roomId = parseRoomIdFromHref(link.href);
+      if (roomId) return roomId;
+    }
+
+    return '';
+  }
+
+  function getTyKey(card) {
+    const directTykey = card.dataset?.tykey;
+    if (directTykey) return directTykey;
+
+    const closestTykey = card.closest('[data-tykey]')?.dataset?.tykey;
+    if (closestTykey) return closestTykey;
+
+    return card.querySelector('[data-tykey]')?.dataset?.tykey || '';
+  }
+
+  function getLegacyStorageIds(card) {
+    const ids = [];
     const bidLink = card.querySelector('a[data-bid]');
-    if (bidLink?.dataset?.bid) return `bid:${bidLink.dataset.bid}`;
-
     const row = card.querySelector('tr[data-href]');
-    if (row?.dataset?.href) return `href:${row.dataset.href}`;
-
     const checkbox = card.querySelector('input.prg-bCheck[name="pkey[]"]');
-    if (checkbox?.value) return `pkey:${checkbox.value}`;
 
-    const title = card.querySelector('.bukkenName')?.textContent?.trim() || 'unknown';
-    return `title:${title}`;
+    pushUnique(ids, bidLink?.dataset?.bid ? `bid:${bidLink.dataset.bid}` : '');
+    pushUnique(ids, card.dataset?.href ? `href:${card.dataset.href}` : '');
+    pushUnique(ids, row?.dataset?.href ? `href:${row.dataset.href}` : '');
+    pushUnique(ids, checkbox?.value ? `pkey:${checkbox.value}` : '');
+
+    return ids;
+  }
+
+  function getLookupStorageIds(card) {
+    const ids = [];
+    const roomId = getRoomId(card);
+    const tykey = getTyKey(card);
+
+    pushUnique(ids, roomId ? `room:${roomId}` : '');
+    pushUnique(ids, tykey ? `tykey:${tykey}` : '');
+    getLegacyStorageIds(card).forEach(id => pushUnique(ids, id));
+    pushUnique(ids, `title:${getTitle(card)}`);
+
+    return ids;
+  }
+
+  function getWriteStorageIds(card) {
+    const lookupIds = getLookupStorageIds(card);
+    const roomId = lookupIds.find(id => id.startsWith('room:'));
+    if (roomId) return [roomId];
+
+    const tykey = lookupIds.find(id => id.startsWith('tykey:'));
+    if (tykey) return [tykey];
+
+    return [lookupIds[0]];
+  }
+
+  function setCardStorageIds(card) {
+    const writeIds = getWriteStorageIds(card).filter(Boolean);
+    const lookupIds = getLookupStorageIds(card);
+
+    card.dataset.hcId = writeIds[0] || '';
+    card.dataset.hcWriteIds = JSON.stringify(writeIds);
+    card.dataset.hcLookupIds = JSON.stringify(lookupIds);
+
+    return { writeIds, lookupIds };
+  }
+
+  function getCardStorageIds(card) {
+    const serializedWriteIds = card.dataset.hcWriteIds;
+    const serializedLookupIds = card.dataset.hcLookupIds;
+
+    if (serializedWriteIds && serializedLookupIds) {
+      try {
+        const writeIds = JSON.parse(serializedWriteIds);
+        const lookupIds = JSON.parse(serializedLookupIds);
+
+        if (
+          Array.isArray(writeIds)
+          && writeIds.length > 0
+          && Array.isArray(lookupIds)
+          && lookupIds.length > 0
+        ) {
+          return { writeIds, lookupIds };
+        }
+      } catch (error) {
+        console.warn('Failed to parse cached storage ids', error);
+      }
+    }
+
+    return setCardStorageIds(card);
   }
 
   function getTitle(card) {
-    return card?.querySelector('.bukkenName')?.textContent?.trim() || '物件名不明';
+    const title =
+      card?.querySelector('.bukkenName')?.textContent?.trim()
+      || card?.closest('.prg-unitListBody')?.querySelector('img[alt]')?.alt?.trim();
+
+    if (title) return title;
+
+    const floor = card?.querySelector('.roomKaisuu')?.textContent?.trim();
+    const roomNumber = card?.querySelector('.roomNumber')?.textContent?.trim();
+    const roomLabel = [floor, roomNumber].filter(Boolean).join(' ');
+
+    return roomLabel || '物件名不明';
   }
 
   function getDefaultState(card) {
@@ -91,8 +230,30 @@
     };
   }
 
-  function getState(id, card) {
-    return normalizeState(cache[id], card);
+  function getResolvedState(card, ids = getCardStorageIds(card).lookupIds) {
+    for (const id of ids) {
+      if (cache[id]) {
+        return {
+          id,
+          state: normalizeState(cache[id], card)
+        };
+      }
+    }
+
+    return {
+      id: ids[0] || '',
+      state: getDefaultState(card)
+    };
+  }
+
+  function syncCacheForIds(ids, rawState, card) {
+    const normalized = normalizeState(rawState, card);
+
+    ids.forEach(id => {
+      cache[id] = normalized;
+    });
+
+    return normalized;
   }
 
   function isDefaultState(state) {
@@ -174,41 +335,75 @@
     return mergedStates;
   }
 
-  async function persistState(id) {
-    const state = normalizeState(cache[id]);
+  function normalizeIds(idsOrId) {
+    if (Array.isArray(idsOrId)) {
+      return [...new Set(idsOrId.filter(Boolean))];
+    }
+
+    if (typeof idsOrId === 'string' && idsOrId.trim()) {
+      const pendingIds = commentSaveTimers.get(idsOrId)?.ids;
+      return pendingIds ? [...new Set(pendingIds.filter(Boolean))] : [idsOrId];
+    }
+
+    return [];
+  }
+
+  async function persistState(ids) {
+    const normalizedIds = normalizeIds(ids);
+    if (normalizedIds.length === 0) return;
+
+    const primaryId = normalizedIds[0];
+    const state = normalizeState(cache[primaryId]);
 
     if (isDefaultState(state)) {
-      delete cache[id];
-      await chrome.storage.sync.remove(getStorageKey(id));
+      normalizedIds.forEach(id => {
+        delete cache[id];
+      });
+      await chrome.storage.sync.remove(normalizedIds.map(getStorageKey));
       return;
     }
 
-    cache[id] = state;
-    await chrome.storage.sync.set({ [getStorageKey(id)]: state });
+    const payload = {};
+
+    normalizedIds.forEach(id => {
+      cache[id] = state;
+      payload[getStorageKey(id)] = state;
+    });
+
+    await chrome.storage.sync.set(payload);
   }
 
-  function schedulePersist(id) {
-    clearScheduledPersist(id);
+  function schedulePersist(ids) {
+    const normalizedIds = normalizeIds(ids);
+    const primaryId = normalizedIds[0];
+    if (!primaryId) return;
+
+    clearScheduledPersist(primaryId);
 
     const timerId = window.setTimeout(async () => {
-      commentSaveTimers.delete(id);
-      await persistState(id);
+      const pending = commentSaveTimers.get(primaryId);
+      commentSaveTimers.delete(primaryId);
+      await persistState(pending?.ids || normalizedIds);
     }, COMMENT_SAVE_DEBOUNCE_MS);
 
-    commentSaveTimers.set(id, timerId);
+    commentSaveTimers.set(primaryId, { timerId, ids: normalizedIds });
   }
 
   function clearScheduledPersist(id) {
-    const timerId = commentSaveTimers.get(id);
-    if (timerId === undefined) return;
+    const pending = commentSaveTimers.get(id);
+    if (!pending) return;
 
-    window.clearTimeout(timerId);
+    window.clearTimeout(pending.timerId);
     commentSaveTimers.delete(id);
   }
 
-  async function flushScheduledPersist(id) {
-    clearScheduledPersist(id);
-    await persistState(id);
+  async function flushScheduledPersist(ids) {
+    const normalizedIds = normalizeIds(ids);
+    const primaryId = normalizedIds[0];
+    if (!primaryId) return;
+
+    clearScheduledPersist(primaryId);
+    await persistState(normalizedIds);
   }
 
   async function flushAllScheduledPersists() {
@@ -326,21 +521,44 @@
       .join('');
   }
 
+  function getPanel(card) {
+    if (card.matches('.hc-panel')) return card;
+
+    const directPanel = card.querySelector('.hc-panel');
+    if (directPanel) return directPanel;
+
+    if (!isCondition1Room(card)) return null;
+
+    return getCondition1Rows(card)
+      .map(row => row.querySelector('.hc-panel'))
+      .find(Boolean) || null;
+  }
+
+  function getDecoratedElements(card) {
+    return isCondition1Room(card) ? getCondition1Rows(card) : [card];
+  }
+
   function applyState(card, state) {
-    card.classList.remove(
-      'hc-color-red',
-      'hc-color-orange',
-      'hc-color-green',
-      'hc-color-blue',
-      'hc-color-gray'
-    );
+    const decoratedElements = getDecoratedElements(card);
+
+    decoratedElements.forEach(element => {
+      element.classList.remove(
+        'hc-color-red',
+        'hc-color-orange',
+        'hc-color-green',
+        'hc-color-blue',
+        'hc-color-gray'
+      );
+    });
 
     const option = getStatusOption(state.color);
     if (option.colorClass) {
-      card.classList.add(`hc-color-${option.colorClass}`);
+      decoratedElements.forEach(element => {
+        element.classList.add(`hc-color-${option.colorClass}`);
+      });
     }
 
-    const badge = card.querySelector('.hc-status-badge');
+    const badge = getPanel(card)?.querySelector('.hc-status-badge');
     if (badge) {
       badge.textContent = option.badgeLabel;
     }
@@ -409,16 +627,17 @@
 
   function filterCards() {
     document.querySelectorAll(ITEM_SELECTOR).forEach(card => {
-      const id = getBuildingId(card);
-      const state = getState(id, card);
+      const state = getResolvedState(card, getCardStorageIds(card).lookupIds).state;
       const isVisible = activeFilterValues.has(state.color);
 
-      card.classList.toggle('hc-filtered-out', !isVisible);
+      getDecoratedElements(card).forEach(element => {
+        element.classList.toggle('hc-filtered-out', !isVisible);
+      });
     });
   }
 
   function syncPanel(card, state) {
-    const panel = card.querySelector('.hc-panel');
+    const panel = getPanel(card);
     if (!panel) return;
 
     const colorSelect = panel.querySelector('.hc-color-select');
@@ -434,10 +653,22 @@
   }
 
   function refreshCard(card) {
-    const id = card.dataset.hcId || getBuildingId(card);
-    card.dataset.hcId = id;
+    const { writeIds, lookupIds } = setCardStorageIds(card);
+    const resolved = getResolvedState(card, lookupIds);
+    const state = resolved.state;
 
-    const state = getState(id, card);
+    if (
+      resolved.id
+      && resolved.id !== writeIds[0]
+      && !resolved.id.startsWith('tykey:')
+      && !isDefaultState(state)
+    ) {
+      syncCacheForIds(writeIds, state, card);
+      void persistState(writeIds).catch(error => {
+        console.error('Failed to backfill canonical status keys', error);
+      });
+    }
+
     syncPanel(card, state);
     applyState(card, state);
   }
@@ -447,7 +678,7 @@
     filterCards();
   }
 
-  function createPanel(card, id, state) {
+  function createPanel(card, ids, state) {
     const panel = document.createElement('div');
     panel.className = 'hc-panel';
 
@@ -470,53 +701,71 @@
 
     const colorSelect = panel.querySelector('.hc-color-select');
     const commentArea = panel.querySelector('.hc-comment');
+    const primaryId = ids[0];
 
     colorSelect.value = state.color;
     commentArea.value = state.comment || '';
 
     colorSelect.addEventListener('change', async () => {
-      cache[id] = {
-        ...getState(id, card),
+      const { lookupIds } = getCardStorageIds(card);
+      const nextState = {
+        ...getResolvedState(card, lookupIds).state,
         color: colorSelect.value,
         title: getTitle(card),
         updatedAt: Date.now()
       };
-      applyState(card, cache[id]);
+      syncCacheForIds(ids, nextState, card);
+      applyState(card, cache[primaryId]);
       filterCards();
-      await flushScheduledPersist(id);
+      await flushScheduledPersist(ids);
     });
 
     commentArea.addEventListener('input', () => {
-      cache[id] = {
-        ...getState(id, card),
+      const { lookupIds } = getCardStorageIds(card);
+      const nextState = {
+        ...getResolvedState(card, lookupIds).state,
         comment: commentArea.value,
         title: getTitle(card),
         updatedAt: Date.now()
       };
-      schedulePersist(id);
+      syncCacheForIds(ids, nextState, card);
+      schedulePersist(ids);
     });
 
     commentArea.addEventListener('blur', async () => {
-      await flushScheduledPersist(id);
+      await flushScheduledPersist(ids);
     });
 
     return panel;
+  }
+
+  function getPanelMountPoint(card) {
+    if (isCondition1Room(card)) {
+      const memberRow = getCondition1Rows(card)
+        .find(row => row.matches('.memberDataRow, .prg-memberDataRow'));
+
+      return memberRow?.querySelector('td')
+        || card.querySelector('td.layout')
+        || card.lastElementChild
+        || card;
+    }
+
+    return (
+      card.querySelector('.moduleInner')
+      || card.querySelector('.moduleBody')
+      || card
+    );
   }
 
   function enhanceCard(card) {
     if (card.dataset.hcEnhanced === '1') return;
     card.dataset.hcEnhanced = '1';
 
-    const id = getBuildingId(card);
-    card.dataset.hcId = id;
-    const state = getState(id, card);
+    const { writeIds, lookupIds } = setCardStorageIds(card);
+    const state = getResolvedState(card, lookupIds).state;
+    const mountPoint = getPanelMountPoint(card);
 
-    const mountPoint =
-      card.querySelector('.moduleInner') ||
-      card.querySelector('.moduleBody') ||
-      card;
-
-    const panel = createPanel(card, id, state);
+    const panel = createPanel(card, writeIds, state);
     mountPoint.appendChild(panel);
 
     refreshCard(card);
