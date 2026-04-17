@@ -31,6 +31,10 @@ const requiredPatterns = [
   'const LOCAL_FILTER_STORAGE_KEY = \'homes_header_filter_v1\'',
   'async function loadStoredFilterValues',
   'async function persistFilterValues',
+  'function getLastUpdatedAt',
+  'function updateToolbarSyncStatus',
+  'data-hc-last-updated',
+  'data-hc-sync-state',
   'id="hc-export"',
   'id="hc-import"'
 ];

@@ -30,7 +30,6 @@
   const DEFAULT_FILTER_VALUES = new Set(
     STATUS_OPTIONS.filter(option => option.defaultChecked).map(option => option.value)
   );
-
   let cache = {};
   let activeFilterValues = new Set(DEFAULT_FILTER_VALUES);
   const commentSaveTimers = new Map();
@@ -564,6 +563,61 @@
       .join('');
   }
 
+  function getLastUpdatedAt() {
+    return Object.values(cache).reduce((latest, rawState) => {
+      const normalized = normalizeState(rawState);
+      return normalized.updatedAt > latest ? normalized.updatedAt : latest;
+    }, 0);
+  }
+
+  function padDatePart(value) {
+    return String(value).padStart(2, '0');
+  }
+
+  function formatUpdatedAt(timestamp) {
+    if (!Number.isFinite(timestamp) || timestamp <= 0) {
+      return '未更新';
+    }
+
+    const date = new Date(timestamp);
+    const year = date.getFullYear();
+    const month = padDatePart(date.getMonth() + 1);
+    const day = padDatePart(date.getDate());
+    const hours = padDatePart(date.getHours());
+    const minutes = padDatePart(date.getMinutes());
+    const seconds = padDatePart(date.getSeconds());
+
+    return `${year}/${month}/${day} ${hours}:${minutes}:${seconds}`;
+  }
+
+  function getToolbarSyncStatus() {
+    if (commentSaveTimers.size > 0) {
+      return '保存待ちの変更があります';
+    }
+
+    return '同期ストレージに保存済み';
+  }
+
+  function updateToolbarSyncStatus() {
+    const toolbar = document.querySelector('.hc-toolbar');
+    if (!toolbar) return;
+
+    const updatedAtValue = toolbar.querySelector('[data-hc-last-updated]');
+    const syncStateValue = toolbar.querySelector('[data-hc-sync-state]');
+    if (!updatedAtValue || !syncStateValue) return;
+
+    const nextUpdatedAt = formatUpdatedAt(getLastUpdatedAt());
+    const nextSyncState = getToolbarSyncStatus();
+
+    if (updatedAtValue.textContent !== nextUpdatedAt) {
+      updatedAtValue.textContent = nextUpdatedAt;
+    }
+
+    if (syncStateValue.textContent !== nextSyncState) {
+      syncStateValue.textContent = nextSyncState;
+    }
+  }
+
   function getPanel(card) {
     if (card.matches('.hc-panel')) return card;
 
@@ -814,6 +868,16 @@
         <div class="hc-filter-group">
           ${renderFilterCheckboxes()}
         </div>
+        <div class="hc-sync-summary">
+          <span class="hc-sync-item">
+            <span class="hc-sync-label">最終更新日時</span>
+            <strong class="hc-sync-value" data-hc-last-updated>未更新</strong>
+          </span>
+          <span class="hc-sync-item">
+            <span class="hc-sync-label">保存状態</span>
+            <strong class="hc-sync-value" data-hc-sync-state>確認中</strong>
+          </span>
+        </div>
         <button type="button" id="hc-export">JSON書き出し</button>
         <button type="button" id="hc-import">JSON読み込み</button>
         <input type="file" id="hc-import-file" class="hc-import-file" accept="application/json,.json">
@@ -865,6 +929,8 @@
         importFileInput.value = '';
       }
     });
+
+    updateToolbarSyncStatus();
   }
 
   function filterCards() {
@@ -927,6 +993,7 @@
   function refreshAllCards() {
     document.querySelectorAll(ITEM_SELECTOR).forEach(refreshCard);
     filterCards();
+    updateToolbarSyncStatus();
   }
 
   function createPanel(card, ids, state) {
@@ -968,6 +1035,7 @@
       syncCacheForIds(ids, nextState, card);
       applyState(card, cache[primaryId]);
       filterCards();
+      updateToolbarSyncStatus();
       await flushScheduledPersist(ids);
     });
 
@@ -981,6 +1049,7 @@
       };
       syncCacheForIds(ids, nextState, card);
       schedulePersist(ids);
+      updateToolbarSyncStatus();
     });
 
     commentArea.addEventListener('blur', async () => {
@@ -1060,6 +1129,7 @@
     createToolbar();
     document.querySelectorAll(ITEM_SELECTOR).forEach(enhanceCard);
     filterCards();
+    updateToolbarSyncStatus();
   }
 
   async function init() {

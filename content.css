@@ -23,6 +23,33 @@
   flex-wrap: wrap;
 }
 
+.hc-sync-summary {
+  display: inline-flex;
+  gap: 10px 16px;
+  align-items: center;
+  flex-wrap: wrap;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: rgba(255,255,255,.08);
+}
+
+.hc-sync-item {
+  display: inline-flex;
+  gap: 6px;
+  align-items: baseline;
+  flex-wrap: wrap;
+}
+
+.hc-sync-label {
+  color: #cbd5e1;
+  font-size: 12px;
+}
+
+.hc-sync-value {
+  font-size: 13px;
+  color: #f8fafc;
+}
+
 .hc-filter-option {
   display: inline-flex;
   gap: 6px;
