@@ -1,12 +1,16 @@
-# storage_sync_v1.1.md
+# storage_sync_v1.2.md
 
 ## 目的
 - HOME'S の一覧で付けたステータスとコメントを `chrome.storage.sync` で共有する。
+- `condition-list` と `condition1` で一覧粒度が違っても、同じ部屋は同じ状態を引き継ぎやすくする。
 - 同期が崩れたときでも、JSON の書き出しと読み込みで状態を救済できるようにする。
 
 ## 保存方針
 - 正本の保存先は `chrome.storage.sync` とする。
-- 1物件につき1 keyで保存し、Chrome sync の1 keyあたり制限に収めやすくする。
+- 保存キーは、取得できるなら `room:<roomId>` を最優先にする。
+- `roomId` は `data-kykey` または部屋詳細 URL (`/chintai/room/.../`) から導く。
+- 部屋キーが取れない場合だけ `tykey:<tykey>` などの fallback を使う。
+- 旧実装の `bid:` `href:` `pkey:` 保存も読み取り対象として残し、画面再表示時に新しい優先キーへ寄せる。
 - 状態には `color` `comment` `title` `updatedAt` を保持する。
 - 既定状態の物件は保存しない。
 
@@ -19,7 +23,7 @@
   "schemaVersion": 1,
   "exportedAt": 1713360000000,
   "states": {
-    "bid:123": {
+    "room:a0649336242d91a967a399930c6e5ef1e6d33ebd": {
       "color": "1",
       "comment": "要確認",
       "title": "サンプル物件",
