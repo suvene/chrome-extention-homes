@@ -4,6 +4,7 @@
   const ITEM_SELECTOR = 'div.mod-newArrivalBuilding, tr.prg-roomInfo[data-kykey]';
   const CONDITION1_ROOM_SELECTOR = 'tr.prg-roomInfo[data-kykey]';
   const CONDITION1_BUNDLE_SELECTOR = '.prg-bundle';
+  const CONDITION_LIST_BUNDLE_SELECTOR = '.bundle';
   const CONDITION1_PAGINATION_NEXT_SELECTOR = '.mod-listPaging li.nextPage a[href]';
   const COMMENT_SAVE_DEBOUNCE_MS = 700;
   const EXPORT_FILENAME = 'homes-condition-notes.json';
@@ -33,6 +34,7 @@
   let activeFilterValues = new Set(DEFAULT_FILTER_VALUES);
   const commentSaveTimers = new Map();
   let isCondition1NextPageLoading = false;
+  let isConditionListNextPageLoading = false;
 
   async function loadAll() {
     cache = await migrateLegacyLocalData();
@@ -64,6 +66,10 @@
 
   function isCondition1Page() {
     return window.location.pathname.startsWith('/search/condition1/');
+  }
+
+  function isConditionListPage() {
+    return window.location.pathname.startsWith('/search/condition-list/');
   }
 
   function getCondition1Rows(card) {
@@ -558,6 +564,10 @@
     return root.querySelector(CONDITION1_BUNDLE_SELECTOR);
   }
 
+  function getConditionListBundle(root = document) {
+    return root.querySelector(CONDITION_LIST_BUNDLE_SELECTOR);
+  }
+
   function getCondition1BuildingBlocks(bundle) {
     if (!bundle) return [];
 
@@ -566,6 +576,16 @@
 
   function getCondition1BundleInsertAnchor(bundle) {
     return bundle?.querySelector('.bukkenListAction.nocheck.bottom') || null;
+  }
+
+  function getConditionListBuildingBlocks(bundle) {
+    if (!bundle) return [];
+
+    return [...bundle.children].filter(child => child.matches('.mod-newArrivalBuilding'));
+  }
+
+  function getConditionListBundleInsertAnchor(bundle) {
+    return bundle?.querySelector('.bundleAction.is-positionBottom') || null;
   }
 
   function getCondition1NextPageUrl(root = document) {
@@ -632,6 +652,28 @@
     return buildingBlocks.length;
   }
 
+  function appendConditionListBuildingBlocks(buildingBlocks, pageLabel = '') {
+    const bundle = getConditionListBundle();
+    if (!bundle || buildingBlocks.length === 0) return 0;
+
+    const fragment = document.createDocumentFragment();
+    if (pageLabel) {
+      fragment.appendChild(createCondition1PageSeparator(pageLabel));
+    }
+    buildingBlocks.forEach(block => {
+      fragment.appendChild(block);
+    });
+
+    const insertAnchor = getConditionListBundleInsertAnchor(bundle);
+    if (insertAnchor) {
+      bundle.insertBefore(fragment, insertAnchor);
+    } else {
+      bundle.appendChild(fragment);
+    }
+
+    return buildingBlocks.length;
+  }
+
   async function loadCondition1NextPages() {
     if (!isCondition1Page() || isCondition1NextPageLoading) return;
     if (!getCondition1Bundle()) return;
@@ -661,6 +703,38 @@
       scan();
     } finally {
       isCondition1NextPageLoading = false;
+    }
+  }
+
+  async function loadConditionListNextPages() {
+    if (!isConditionListPage() || isConditionListNextPageLoading) return;
+    if (!getConditionListBundle()) return;
+
+    isConditionListNextPageLoading = true;
+
+    const visitedUrls = new Set([new URL(window.location.href).href]);
+    let nextUrl = getCondition1NextPageUrl();
+
+    try {
+      while (nextUrl && !visitedUrls.has(nextUrl)) {
+        visitedUrls.add(nextUrl);
+
+        const nextDocument = await fetchHtmlDocument(nextUrl);
+        const nextBundle = getConditionListBundle(nextDocument);
+        const buildingBlocks = getConditionListBuildingBlocks(nextBundle);
+        const pageLabel = getCondition1PageLabel(nextDocument);
+
+        if (buildingBlocks.length === 0) {
+          break;
+        }
+
+        appendConditionListBuildingBlocks(buildingBlocks, pageLabel);
+        nextUrl = getCondition1NextPageUrl(nextDocument);
+      }
+
+      scan();
+    } finally {
+      isConditionListNextPageLoading = false;
     }
   }
 
@@ -960,6 +1034,9 @@
 
     void loadCondition1NextPages().catch(error => {
       console.error('Failed to load condition1 next pages', error);
+    });
+    void loadConditionListNextPages().catch(error => {
+      console.error('Failed to load condition-list next pages', error);
     });
   }
 
