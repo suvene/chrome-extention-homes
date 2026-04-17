@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "HOME'S 条件一覧アシスト",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "HOME'Sの条件一覧にコメント・色分け・非表示機能を追加",
   "permissions": ["storage"],
   "host_permissions": [
