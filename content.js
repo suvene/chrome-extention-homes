@@ -3,9 +3,30 @@
   const SYNC_KEY_PREFIX = 'homes_condition_note_v2:';
   const ITEM_SELECTOR = 'div.mod-newArrivalBuilding';
   const COMMENT_SAVE_DEBOUNCE_MS = 700;
-  const COLOR_OPTIONS = new Set(['', 'red', 'yellow', 'green', 'blue']);
+  const STATUS_OPTIONS = [
+    { value: '0', label: '0. 未検討', badgeLabel: '0. 未検討', colorClass: '', defaultChecked: true },
+    { value: '1', label: '1. 除外候補', badgeLabel: '1. 除外候補', colorClass: 'red', defaultChecked: true },
+    { value: '2', label: '2. 要確認', badgeLabel: '2. 要確認', colorClass: 'orange', defaultChecked: true },
+    { value: '3', label: '3. 検討中', badgeLabel: '3. 検討中', colorClass: 'green', defaultChecked: true },
+    { value: '4', label: '4. 本命', badgeLabel: '4. 本命', colorClass: 'blue', defaultChecked: true },
+    { value: '9', label: '9. 除外', badgeLabel: '9. 除外', colorClass: 'gray', defaultChecked: false }
+  ];
+  const STATUS_VALUES = new Set(STATUS_OPTIONS.map(option => option.value));
+  const LEGACY_STATUS_MAP = {
+    '': '0',
+    red: '1',
+    yellow: '2',
+    orange: '2',
+    green: '4',
+    blue: '3',
+    gray: '9'
+  };
+  const DEFAULT_FILTER_VALUES = new Set(
+    STATUS_OPTIONS.filter(option => option.defaultChecked).map(option => option.value)
+  );
 
   let cache = {};
+  let activeFilterValues = new Set(DEFAULT_FILTER_VALUES);
   const commentSaveTimers = new Map();
 
   async function loadAll() {
@@ -39,27 +60,32 @@
   }
 
   function getTitle(card) {
-    return card?.querySelector('.bukkenName')?.textContent?.trim() || '名称不明';
+    return card?.querySelector('.bukkenName')?.textContent?.trim() || '物件名不明';
   }
 
   function getDefaultState(card) {
     return {
       hidden: false,
-      color: '',
+      color: '0',
       comment: '',
       title: getTitle(card),
       updatedAt: 0
     };
   }
 
+  function normalizeStatusValue(rawColor) {
+    if (typeof rawColor !== 'string') return '0';
+    if (STATUS_VALUES.has(rawColor)) return rawColor;
+    return LEGACY_STATUS_MAP[rawColor] || '0';
+  }
+
   function normalizeState(state, card) {
     const fallback = getDefaultState(card);
     const updatedAt = Number(state?.updatedAt);
-    const color = typeof state?.color === 'string' ? state.color : '';
 
     return {
       hidden: Boolean(state?.hidden),
-      color: COLOR_OPTIONS.has(color) ? color : '',
+      color: normalizeStatusValue(state?.color),
       comment: typeof state?.comment === 'string' ? state.comment : '',
       title: typeof state?.title === 'string' && state.title.trim() ? state.title : fallback.title,
       updatedAt: Number.isFinite(updatedAt) ? updatedAt : fallback.updatedAt
@@ -71,7 +97,7 @@
   }
 
   function isDefaultState(state) {
-    return !state.hidden && !state.color && !state.comment.trim();
+    return state.color === '0' && !state.comment.trim();
   }
 
   function statesEqual(left, right) {
@@ -195,34 +221,58 @@
     );
   }
 
+  function getStatusOption(value) {
+    return STATUS_OPTIONS.find(option => option.value === value) || STATUS_OPTIONS[0];
+  }
+
+  function renderStatusSelectOptions() {
+    return STATUS_OPTIONS
+      .map(option => `<option value="${option.value}">${option.label}</option>`)
+      .join('');
+  }
+
+  function renderFilterCheckboxes() {
+    return STATUS_OPTIONS
+      .map(option => `
+        <label class="hc-filter-option">
+          <input
+            type="checkbox"
+            class="hc-filter-checkbox"
+            value="${option.value}"
+            ${option.defaultChecked ? 'checked' : ''}
+          >
+          ${option.label}
+        </label>
+      `)
+      .join('');
+  }
+
+  function isAutoHiddenStatus(state) {
+    return state.color === '9';
+  }
+
   function applyState(card, state) {
     card.classList.remove(
       'hc-color-red',
-      'hc-color-yellow',
+      'hc-color-orange',
       'hc-color-green',
       'hc-color-blue',
+      'hc-color-gray',
       'hc-hidden'
     );
 
-    if (state.color) {
-      card.classList.add(`hc-color-${state.color}`);
+    const option = getStatusOption(state.color);
+    if (option.colorClass) {
+      card.classList.add(`hc-color-${option.colorClass}`);
     }
 
-    if (state.hidden) {
+    if (isAutoHiddenStatus(state)) {
       card.classList.add('hc-hidden');
     }
 
     const badge = card.querySelector('.hc-status-badge');
     if (badge) {
-      const colorLabelMap = {
-        red: '除外候補',
-        yellow: '要確認',
-        green: '本命',
-        blue: '比較中'
-      };
-      badge.textContent = state.hidden
-        ? '非表示'
-        : (colorLabelMap[state.color] || '未分類');
+      badge.textContent = option.badgeLabel;
     }
   }
 
@@ -234,30 +284,26 @@
     toolbar.innerHTML = `
       <div class="hc-toolbar-inner">
         <strong>HOME'S 条件一覧アシスト</strong>
-        <label><input type="checkbox" id="hc-toggle-hidden"> 非表示も表示</label>
-        <select id="hc-filter-color">
-          <option value="">全色</option>
-          <option value="red">除外候補</option>
-          <option value="yellow">要確認</option>
-          <option value="green">本命</option>
-          <option value="blue">比較中</option>
-        </select>
+        <div class="hc-filter-group">
+          ${renderFilterCheckboxes()}
+        </div>
         <button type="button" id="hc-export">JSON書き出し</button>
       </div>
     `;
     document.body.prepend(toolbar);
 
-    const hiddenToggle = toolbar.querySelector('#hc-toggle-hidden');
-    const colorFilter = toolbar.querySelector('#hc-filter-color');
+    const filterCheckboxes = toolbar.querySelectorAll('.hc-filter-checkbox');
     const exportBtn = toolbar.querySelector('#hc-export');
 
-    hiddenToggle.addEventListener('change', () => {
-      document.documentElement.classList.toggle('hc-show-hidden', hiddenToggle.checked);
-    });
-
-    colorFilter.addEventListener('change', () => {
-      document.documentElement.dataset.hcFilterColor = colorFilter.value;
-      filterCards();
+    filterCheckboxes.forEach(checkbox => {
+      checkbox.addEventListener('change', () => {
+        activeFilterValues = new Set(
+          [...filterCheckboxes]
+            .filter(input => input.checked)
+            .map(input => input.value)
+        );
+        filterCards();
+      });
     });
 
     exportBtn.addEventListener('click', () => {
@@ -272,13 +318,12 @@
   }
 
   function filterCards() {
-    const color = document.documentElement.dataset.hcFilterColor || '';
     document.querySelectorAll(ITEM_SELECTOR).forEach(card => {
       const id = getBuildingId(card);
       const state = getState(id, card);
+      const isVisible = activeFilterValues.has(state.color);
 
-      const colorMatched = !color || state.color === color;
-      card.classList.toggle('hc-filtered-out', !colorMatched);
+      card.classList.toggle('hc-filtered-out', !isVisible);
     });
   }
 
@@ -286,16 +331,11 @@
     const panel = card.querySelector('.hc-panel');
     if (!panel) return;
 
-    const hiddenCheckbox = panel.querySelector('.hc-hidden-checkbox');
     const colorSelect = panel.querySelector('.hc-color-select');
     const commentArea = panel.querySelector('.hc-comment');
 
-    if (hiddenCheckbox && hiddenCheckbox.checked !== Boolean(state.hidden)) {
-      hiddenCheckbox.checked = Boolean(state.hidden);
-    }
-
-    if (colorSelect && colorSelect.value !== (state.color || '')) {
-      colorSelect.value = state.color || '';
+    if (colorSelect && colorSelect.value !== state.color) {
+      colorSelect.value = state.color;
     }
 
     if (commentArea && commentArea.value !== (state.comment || '')) {
@@ -324,22 +364,13 @@
     panel.innerHTML = `
       <div class="hc-panel-row">
         <label class="hc-inline">
-          <input type="checkbox" class="hc-hidden-checkbox">
-          非表示
-        </label>
-
-        <label class="hc-inline">
-          色分け
+          ステータス
           <select class="hc-color-select">
-            <option value="">未分類</option>
-            <option value="red">除外候補</option>
-            <option value="yellow">要確認</option>
-            <option value="green">本命</option>
-            <option value="blue">比較中</option>
+            ${renderStatusSelectOptions()}
           </select>
         </label>
 
-        <span class="hc-status-badge">未分類</span>
+        <span class="hc-status-badge">0. 未検討</span>
       </div>
 
       <div class="hc-panel-row">
@@ -347,24 +378,11 @@
       </div>
     `;
 
-    const hiddenCheckbox = panel.querySelector('.hc-hidden-checkbox');
     const colorSelect = panel.querySelector('.hc-color-select');
     const commentArea = panel.querySelector('.hc-comment');
 
-    hiddenCheckbox.checked = !!state.hidden;
-    colorSelect.value = state.color || '';
+    colorSelect.value = state.color;
     commentArea.value = state.comment || '';
-
-    hiddenCheckbox.addEventListener('change', async () => {
-      cache[id] = {
-        ...getState(id, card),
-        hidden: hiddenCheckbox.checked,
-        title: getTitle(card),
-        updatedAt: Date.now()
-      };
-      applyState(card, cache[id]);
-      await flushScheduledPersist(id);
-    });
 
     colorSelect.addEventListener('change', async () => {
       cache[id] = {
