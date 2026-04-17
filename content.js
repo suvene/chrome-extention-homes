@@ -1,16 +1,27 @@
 (() => {
-  const STORAGE_KEY = 'homes_condition_notes_v1';
+  const LEGACY_STORAGE_KEY = 'homes_condition_notes_v1';
+  const SYNC_KEY_PREFIX = 'homes_condition_note_v2:';
   const ITEM_SELECTOR = 'div.mod-newArrivalBuilding';
+  const COMMENT_SAVE_DEBOUNCE_MS = 700;
+  const COLOR_OPTIONS = new Set(['', 'red', 'yellow', 'green', 'blue']);
 
   let cache = {};
+  const commentSaveTimers = new Map();
 
   async function loadAll() {
-    const result = await chrome.storage.local.get(STORAGE_KEY);
-    cache = result[STORAGE_KEY] || {};
+    cache = await migrateLegacyLocalData();
   }
 
-  async function saveAll() {
-    await chrome.storage.local.set({ [STORAGE_KEY]: cache });
+  function getStorageKey(id) {
+    return `${SYNC_KEY_PREFIX}${id}`;
+  }
+
+  function isManagedStorageKey(key) {
+    return key.startsWith(SYNC_KEY_PREFIX);
+  }
+
+  function getIdFromStorageKey(key) {
+    return key.slice(SYNC_KEY_PREFIX.length);
   }
 
   function getBuildingId(card) {
@@ -28,7 +39,7 @@
   }
 
   function getTitle(card) {
-    return card.querySelector('.bukkenName')?.textContent?.trim() || '名称不明';
+    return card?.querySelector('.bukkenName')?.textContent?.trim() || '名称不明';
   }
 
   function getDefaultState(card) {
@@ -37,13 +48,151 @@
       color: '',
       comment: '',
       title: getTitle(card),
-      updatedAt: Date.now()
+      updatedAt: 0
+    };
+  }
+
+  function normalizeState(state, card) {
+    const fallback = getDefaultState(card);
+    const updatedAt = Number(state?.updatedAt);
+    const color = typeof state?.color === 'string' ? state.color : '';
+
+    return {
+      hidden: Boolean(state?.hidden),
+      color: COLOR_OPTIONS.has(color) ? color : '',
+      comment: typeof state?.comment === 'string' ? state.comment : '',
+      title: typeof state?.title === 'string' && state.title.trim() ? state.title : fallback.title,
+      updatedAt: Number.isFinite(updatedAt) ? updatedAt : fallback.updatedAt
     };
   }
 
   function getState(id, card) {
-    if (!cache[id]) cache[id] = getDefaultState(card);
-    return cache[id];
+    return normalizeState(cache[id], card);
+  }
+
+  function isDefaultState(state) {
+    return !state.hidden && !state.color && !state.comment.trim();
+  }
+
+  function statesEqual(left, right) {
+    if (!left || !right) return false;
+
+    return left.hidden === right.hidden
+      && left.color === right.color
+      && left.comment === right.comment
+      && left.title === right.title
+      && left.updatedAt === right.updatedAt;
+  }
+
+  function pickNewerState(current, incoming) {
+    if (!current) return incoming;
+    return incoming.updatedAt >= current.updatedAt ? incoming : current;
+  }
+
+  function extractManagedStates(storageItems) {
+    const states = {};
+
+    Object.entries(storageItems).forEach(([key, value]) => {
+      if (!isManagedStorageKey(key)) return;
+
+      states[getIdFromStorageKey(key)] = normalizeState(value);
+    });
+
+    return states;
+  }
+
+  async function loadSyncStates() {
+    const syncItems = await chrome.storage.sync.get(null);
+    return extractManagedStates(syncItems);
+  }
+
+  async function writeStatesToSync(states) {
+    const payload = {};
+
+    Object.entries(states).forEach(([id, rawState]) => {
+      const state = normalizeState(rawState);
+      if (isDefaultState(state)) return;
+      payload[getStorageKey(id)] = state;
+    });
+
+    if (Object.keys(payload).length === 0) return;
+    await chrome.storage.sync.set(payload);
+  }
+
+  async function migrateLegacyLocalData() {
+    const [syncStates, legacyResult] = await Promise.all([
+      loadSyncStates(),
+      chrome.storage.local.get(LEGACY_STORAGE_KEY)
+    ]);
+    const legacyStates = legacyResult[LEGACY_STORAGE_KEY] || {};
+    const mergedStates = { ...syncStates };
+    let hasSyncChanges = false;
+
+    Object.entries(legacyStates).forEach(([id, rawState]) => {
+      const normalized = normalizeState(rawState);
+      if (isDefaultState(normalized)) return;
+
+      const merged = pickNewerState(mergedStates[id], normalized);
+      if (!statesEqual(mergedStates[id], merged)) {
+        mergedStates[id] = merged;
+        hasSyncChanges = true;
+      }
+    });
+
+    if (hasSyncChanges) {
+      await writeStatesToSync(mergedStates);
+    }
+
+    if (Object.keys(legacyStates).length > 0) {
+      await chrome.storage.local.remove(LEGACY_STORAGE_KEY);
+    }
+
+    return mergedStates;
+  }
+
+  async function persistState(id) {
+    const state = normalizeState(cache[id]);
+
+    if (isDefaultState(state)) {
+      delete cache[id];
+      await chrome.storage.sync.remove(getStorageKey(id));
+      return;
+    }
+
+    cache[id] = state;
+    await chrome.storage.sync.set({ [getStorageKey(id)]: state });
+  }
+
+  function schedulePersist(id) {
+    clearScheduledPersist(id);
+
+    const timerId = window.setTimeout(async () => {
+      commentSaveTimers.delete(id);
+      await persistState(id);
+    }, COMMENT_SAVE_DEBOUNCE_MS);
+
+    commentSaveTimers.set(id, timerId);
+  }
+
+  function clearScheduledPersist(id) {
+    const timerId = commentSaveTimers.get(id);
+    if (timerId === undefined) return;
+
+    window.clearTimeout(timerId);
+    commentSaveTimers.delete(id);
+  }
+
+  async function flushScheduledPersist(id) {
+    clearScheduledPersist(id);
+    await persistState(id);
+  }
+
+  function getExportableCache() {
+    return Object.fromEntries(
+      Object.entries(cache)
+        .map(([id, rawState]) => [id, normalizeState(rawState)])
+        .filter(([, state]) => !isDefaultState(state))
+    );
   }
 
   function applyState(card, state) {
@@ -112,7 +261,7 @@
     });
 
     exportBtn.addEventListener('click', () => {
-      const blob = new Blob([JSON.stringify(cache, null, 2)], { type: 'application/json' });
+      const blob = new Blob([JSON.stringify(getExportableCache(), null, 2)], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
@@ -131,6 +280,41 @@
       const colorMatched = !color || state.color === color;
       card.classList.toggle('hc-filtered-out', !colorMatched);
     });
+  }
+
+  function syncPanel(card, state) {
+    const panel = card.querySelector('.hc-panel');
+    if (!panel) return;
+
+    const hiddenCheckbox = panel.querySelector('.hc-hidden-checkbox');
+    const colorSelect = panel.querySelector('.hc-color-select');
+    const commentArea = panel.querySelector('.hc-comment');
+
+    if (hiddenCheckbox && hiddenCheckbox.checked !== Boolean(state.hidden)) {
+      hiddenCheckbox.checked = Boolean(state.hidden);
+    }
+
+    if (colorSelect && colorSelect.value !== (state.color || '')) {
+      colorSelect.value = state.color || '';
+    }
+
+    if (commentArea && commentArea.value !== (state.comment || '')) {
+      commentArea.value = state.comment || '';
+    }
+  }
+
+  function refreshCard(card) {
+    const id = card.dataset.hcId || getBuildingId(card);
+    card.dataset.hcId = id;
+
+    const state = getState(id, card);
+    syncPanel(card, state);
+    applyState(card, state);
+  }
+
+  function refreshAllCards() {
+    document.querySelectorAll(ITEM_SELECTOR).forEach(refreshCard);
+    filterCards();
   }
 
   function createPanel(card, id, state) {
@@ -173,36 +357,39 @@
 
     hiddenCheckbox.addEventListener('change', async () => {
       cache[id] = {
-        ...state,
-        ...cache[id],
+        ...getState(id, card),
         hidden: hiddenCheckbox.checked,
+        title: getTitle(card),
         updatedAt: Date.now()
       };
       applyState(card, cache[id]);
-      await saveAll();
+      await flushScheduledPersist(id);
     });
 
     colorSelect.addEventListener('change', async () => {
       cache[id] = {
-        ...state,
-        ...cache[id],
+        ...getState(id, card),
         color: colorSelect.value,
+        title: getTitle(card),
         updatedAt: Date.now()
       };
       applyState(card, cache[id]);
       filterCards();
-      await saveAll();
+      await flushScheduledPersist(id);
     });
 
-    commentArea.addEventListener('input', async () => {
+    commentArea.addEventListener('input', () => {
       cache[id] = {
-        ...state,
-        ...cache[id],
+        ...getState(id, card),
         comment: commentArea.value,
         title: getTitle(card),
         updatedAt: Date.now()
       };
-      await saveAll();
+      schedulePersist(id);
+    });
+
+    commentArea.addEventListener('blur', async () => {
+      await flushScheduledPersist(id);
     });
 
     return panel;
@@ -213,6 +400,7 @@
     card.dataset.hcEnhanced = '1';
 
     const id = getBuildingId(card);
+    card.dataset.hcId = id;
     const state = getState(id, card);
 
     const mountPoint =
@@ -223,7 +411,30 @@
     const panel = createPanel(card, id, state);
     mountPoint.appendChild(panel);
 
-    applyState(card, state);
+    refreshCard(card);
+  }
+
+  function handleStorageChange(changes, areaName) {
+    if (areaName !== 'sync') return;
+
+    let shouldRefresh = false;
+
+    Object.entries(changes).forEach(([key, change]) => {
+      if (!isManagedStorageKey(key)) return;
+
+      const id = getIdFromStorageKey(key);
+      if (change.newValue) {
+        cache[id] = normalizeState(change.newValue);
+      } else {
+        clearScheduledPersist(id);
+        delete cache[id];
+      }
+      shouldRefresh = true;
+    });
+
+    if (shouldRefresh) {
+      refreshAllCards();
+    }
   }
 
   function scan() {
@@ -234,6 +445,7 @@
 
   async function init() {
     await loadAll();
+    chrome.storage.onChanged.addListener(handleStorageChange);
     scan();
 
     const observer = new MutationObserver(() => {
