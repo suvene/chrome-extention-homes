@@ -126,7 +126,7 @@
 ## 17. [DOCS] Repository references
 必要に応じて、次のファイルを参照してください。
 
-- `docs/testing_v1.0.md`
+- `docs/testing_v1.1.md`
   - `tests/` 配下の確認をいつ・どう実行するかの正本
 
 ## 20. Codex-specific
@@ -143,7 +143,7 @@
 3. 通るための最小変更を実装する
 4. ローカルで成功したあとにだけ、より広い検証を行う
 5. 何を検証し、何をまだ検証していないかを要約する
-6. `tests/` に再利用可能な確認がある場合は、それを優先して使い、入口は `docs/testing_v1.0.md` と `tests/README.md` で確認する
+6. `tests/` に再利用可能な確認がある場合は、それを優先して使い、入口は `docs/testing_v1.1.md` と `tests/README.md` で確認する
 
 ### 23. Skills usage
 - タスクが反復可能なワークフローに一致する場合は、即興で進める前に該当 Skill を確認してください。

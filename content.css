@@ -38,6 +38,16 @@
   display: none;
 }
 
+.hc-page-separator {
+  margin: 18px 0 14px;
+  padding: 8px 12px;
+  border-top: 2px solid #cbd5e1;
+  color: #475569;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: .04em;
+}
+
 .hc-panel {
   margin-top: 12px;
   padding: 10px 12px;

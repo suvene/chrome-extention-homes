@@ -6,6 +6,12 @@
 
 実行方法:
 
+```bash
+node ./tests/smoke.js
+```
+
+PowerShell が使える環境では、既存の入口も使えます。
+
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\tests\smoke.ps1
 ```
