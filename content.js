@@ -3,6 +3,9 @@
   const SYNC_KEY_PREFIX = 'homes_condition_note_v2:';
   const ITEM_SELECTOR = 'div.mod-newArrivalBuilding, tr.prg-roomInfo[data-kykey]';
   const CONDITION1_ROOM_SELECTOR = 'tr.prg-roomInfo[data-kykey]';
+  const CONDITION1_BUNDLE_SELECTOR = '.prg-bundle';
+  const CONDITION_LIST_BUNDLE_SELECTOR = '.bundle';
+  const CONDITION1_PAGINATION_NEXT_SELECTOR = '.mod-listPaging li.nextPage a[href]';
   const COMMENT_SAVE_DEBOUNCE_MS = 700;
   const EXPORT_FILENAME = 'homes-condition-notes.json';
   const STATUS_OPTIONS = [
@@ -30,6 +33,8 @@
   let cache = {};
   let activeFilterValues = new Set(DEFAULT_FILTER_VALUES);
   const commentSaveTimers = new Map();
+  let isCondition1NextPageLoading = false;
+  let isConditionListNextPageLoading = false;
 
   async function loadAll() {
     cache = await migrateLegacyLocalData();
@@ -57,6 +62,14 @@
 
   function isCondition1Room(card) {
     return card.matches(CONDITION1_ROOM_SELECTOR);
+  }
+
+  function isCondition1Page() {
+    return window.location.pathname.startsWith('/search/condition1/');
+  }
+
+  function isConditionListPage() {
+    return window.location.pathname.startsWith('/search/condition-list/');
   }
 
   function getCondition1Rows(card) {
@@ -547,6 +560,184 @@
     );
   }
 
+  function getCondition1Bundle(root = document) {
+    return root.querySelector(CONDITION1_BUNDLE_SELECTOR);
+  }
+
+  function getConditionListBundle(root = document) {
+    return root.querySelector(CONDITION_LIST_BUNDLE_SELECTOR);
+  }
+
+  function getCondition1BuildingBlocks(bundle) {
+    if (!bundle) return [];
+
+    return [...bundle.children].filter(child => child.querySelector('.moduleInner.prg-building'));
+  }
+
+  function getCondition1BundleInsertAnchor(bundle) {
+    return bundle?.querySelector('.bukkenListAction.nocheck.bottom') || null;
+  }
+
+  function getConditionListBuildingBlocks(bundle) {
+    if (!bundle) return [];
+
+    return [...bundle.children].filter(child => child.matches('.mod-newArrivalBuilding'));
+  }
+
+  function getConditionListBundleInsertAnchor(bundle) {
+    return bundle?.querySelector('.bundleAction.is-positionBottom') || null;
+  }
+
+  function getCondition1NextPageUrl(root = document) {
+    const nextLink = root.querySelector(CONDITION1_PAGINATION_NEXT_SELECTOR);
+    const href = nextLink?.getAttribute('href');
+    if (!href) return '';
+
+    try {
+      return new URL(href, window.location.href).href;
+    } catch (error) {
+      console.warn('Failed to resolve condition1 next page URL', error);
+      return '';
+    }
+  }
+
+  function getCondition1PageLabel(root = document) {
+    const selectedPage =
+      root.querySelector('.mod-listPaging li.selected [aria-current="page"]')
+      || root.querySelector('.mod-listPaging li.selected span')
+      || root.querySelector('.mod-listPaging li.selected a');
+
+    const pageNumber = selectedPage?.textContent?.trim();
+    if (!pageNumber) return '';
+
+    return `Page ${pageNumber}`;
+  }
+
+  async function fetchHtmlDocument(url) {
+    const response = await fetch(url, { credentials: 'include' });
+    if (!response.ok) {
+      throw new Error(`Failed to fetch ${url}: ${response.status}`);
+    }
+
+    const html = await response.text();
+    return new DOMParser().parseFromString(html, 'text/html');
+  }
+
+  function createCondition1PageSeparator(pageLabel) {
+    const separator = document.createElement('div');
+    separator.className = 'hc-page-separator';
+    separator.textContent = pageLabel;
+    return separator;
+  }
+
+  function appendCondition1BuildingBlocks(buildingBlocks, pageLabel = '') {
+    const bundle = getCondition1Bundle();
+    if (!bundle || buildingBlocks.length === 0) return 0;
+
+    const fragment = document.createDocumentFragment();
+    if (pageLabel) {
+      fragment.appendChild(createCondition1PageSeparator(pageLabel));
+    }
+    buildingBlocks.forEach(block => {
+      fragment.appendChild(block);
+    });
+
+    const insertAnchor = getCondition1BundleInsertAnchor(bundle);
+    if (insertAnchor) {
+      bundle.insertBefore(fragment, insertAnchor);
+    } else {
+      bundle.appendChild(fragment);
+    }
+
+    return buildingBlocks.length;
+  }
+
+  function appendConditionListBuildingBlocks(buildingBlocks, pageLabel = '') {
+    const bundle = getConditionListBundle();
+    if (!bundle || buildingBlocks.length === 0) return 0;
+
+    const fragment = document.createDocumentFragment();
+    if (pageLabel) {
+      fragment.appendChild(createCondition1PageSeparator(pageLabel));
+    }
+    buildingBlocks.forEach(block => {
+      fragment.appendChild(block);
+    });
+
+    const insertAnchor = getConditionListBundleInsertAnchor(bundle);
+    if (insertAnchor) {
+      bundle.insertBefore(fragment, insertAnchor);
+    } else {
+      bundle.appendChild(fragment);
+    }
+
+    return buildingBlocks.length;
+  }
+
+  async function loadCondition1NextPages() {
+    if (!isCondition1Page() || isCondition1NextPageLoading) return;
+    if (!getCondition1Bundle()) return;
+
+    isCondition1NextPageLoading = true;
+
+    const visitedUrls = new Set([new URL(window.location.href).href]);
+    let nextUrl = getCondition1NextPageUrl();
+
+    try {
+      while (nextUrl && !visitedUrls.has(nextUrl)) {
+        visitedUrls.add(nextUrl);
+
+        const nextDocument = await fetchHtmlDocument(nextUrl);
+        const nextBundle = getCondition1Bundle(nextDocument);
+        const buildingBlocks = getCondition1BuildingBlocks(nextBundle);
+        const pageLabel = getCondition1PageLabel(nextDocument);
+
+        if (buildingBlocks.length === 0) {
+          break;
+        }
+
+        appendCondition1BuildingBlocks(buildingBlocks, pageLabel);
+        nextUrl = getCondition1NextPageUrl(nextDocument);
+      }
+
+      scan();
+    } finally {
+      isCondition1NextPageLoading = false;
+    }
+  }
+
+  async function loadConditionListNextPages() {
+    if (!isConditionListPage() || isConditionListNextPageLoading) return;
+    if (!getConditionListBundle()) return;
+
+    isConditionListNextPageLoading = true;
+
+    const visitedUrls = new Set([new URL(window.location.href).href]);
+    let nextUrl = getCondition1NextPageUrl();
+
+    try {
+      while (nextUrl && !visitedUrls.has(nextUrl)) {
+        visitedUrls.add(nextUrl);
+
+        const nextDocument = await fetchHtmlDocument(nextUrl);
+        const nextBundle = getConditionListBundle(nextDocument);
+        const buildingBlocks = getConditionListBuildingBlocks(nextBundle);
+        const pageLabel = getCondition1PageLabel(nextDocument);
+
+        if (buildingBlocks.length === 0) {
+          break;
+        }
+
+        appendConditionListBuildingBlocks(buildingBlocks, pageLabel);
+        nextUrl = getCondition1NextPageUrl(nextDocument);
+      }
+
+      scan();
+    } finally {
+      isConditionListNextPageLoading = false;
+    }
+  }
+
   function syncCondition1BuildingVisibility(buildingContainers) {
     buildingContainers.forEach(container => {
       const hasVisibleRooms = [...container.querySelectorAll(CONDITION1_ROOM_SELECTOR)]
@@ -839,6 +1030,13 @@
     observer.observe(document.body, {
       childList: true,
       subtree: true
+    });
+
+    void loadCondition1NextPages().catch(error => {
+      console.error('Failed to load condition1 next pages', error);
+    });
+    void loadConditionListNextPages().catch(error => {
+      console.error('Failed to load condition-list next pages', error);
     });
   }
 
