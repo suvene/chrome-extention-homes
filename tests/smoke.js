@@ -9,6 +9,10 @@ const docsPath = path.join(repoRoot, 'docs');
 
 const requiredPatterns = [
   "const CONDITION1_ROOM_SELECTOR = 'tr.prg-roomInfo[data-kykey]'",
+  "value: '1', label: '1. 要確認'",
+  "value: '2', label: '2. 検討中'",
+  "value: '3', label: '3. 本命'",
+  "value: '8', label: '8. 除外候補'",
   'function getRoomId',
   'function getTyKey',
   'function getPanelMountPoint',
