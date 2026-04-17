@@ -8,7 +8,7 @@
   const CONDITION_LIST_BUNDLE_SELECTOR = '.bundle';
   const CONDITION1_PAGINATION_NEXT_SELECTOR = '.mod-listPaging li.nextPage a[href]';
   const COMMENT_SAVE_DEBOUNCE_MS = 700;
-  const EXPORT_FILENAME = 'homes-condition-notes.json';
+  const EXPORT_FILENAME_PREFIX = 'homes-condition-notes';
   const STATUS_OPTIONS = [
     { value: '0', label: '0. 未検討', badgeLabel: '0. 未検討', colorClass: '', defaultChecked: true },
     { value: '1', label: '1. 要確認', badgeLabel: '1. 要確認', colorClass: 'orange', defaultChecked: true },
@@ -471,6 +471,21 @@
     };
   }
 
+  function formatExportTimestamp(date) {
+    const year = String(date.getFullYear()).slice(-2);
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    const hours = String(date.getHours()).padStart(2, '0');
+    const minutes = String(date.getMinutes()).padStart(2, '0');
+    const seconds = String(date.getSeconds()).padStart(2, '0');
+
+    return `${year}${month}${day}-${hours}${minutes}${seconds}`;
+  }
+
+  function getExportFilename(date = new Date()) {
+    return `${EXPORT_FILENAME_PREFIX}-${formatExportTimestamp(date)}.json`;
+  }
+
   function parseImportPayload(parsedJson) {
     const rawStates =
       parsedJson
@@ -507,7 +522,7 @@
 
   async function exportJson() {
     await flushAllScheduledPersists();
-    downloadJson(EXPORT_FILENAME, buildExportPayload());
+    downloadJson(getExportFilename(), buildExportPayload());
   }
 
   async function importJson(file) {

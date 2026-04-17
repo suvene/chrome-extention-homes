@@ -25,6 +25,8 @@ const requiredPatterns = [
   'async function loadConditionListNextPages',
   'function syncCondition1BuildingVisibility',
   'function buildExportPayload',
+  'function formatExportTimestamp',
+  'function getExportFilename',
   'function parseImportPayload',
   'async function exportJson',
   'async function importJson',
@@ -86,10 +88,29 @@ function checkRequiredPatterns() {
   }
 }
 
+function checkExportFilenameConvention() {
+  console.log('Checking JSON export filename convention...');
+
+  const content = fs.readFileSync(contentPath, 'utf8');
+
+  if (!content.includes("const EXPORT_FILENAME_PREFIX = 'homes-condition-notes'")) {
+    throw new Error('JSON export filename prefix is missing or changed unexpectedly.');
+  }
+
+  if (!content.includes('return `${year}${month}${day}-${hours}${minutes}${seconds}`;')) {
+    throw new Error('JSON export timestamp format is not YYMMDD-HHMMSS.');
+  }
+
+  if (!content.includes('return `${EXPORT_FILENAME_PREFIX}-${formatExportTimestamp(date)}.json`;')) {
+    throw new Error('JSON export filename must include the timestamp suffix.');
+  }
+}
+
 function main() {
   checkJavaScriptSyntax();
   checkLegacyHiddenReferences();
   checkRequiredPatterns();
+  checkExportFilenameConvention();
   console.log('Smoke checks passed.');
 }
 
