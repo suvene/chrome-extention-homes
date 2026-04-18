@@ -1,0 +1,70 @@
+# storage_sync_v1.4.md
+
+## 目的
+- HOME'S / SUUMO の一覧で付けたステータスとコメントを、同じブラウザ内の `chrome.storage.local` に保存する。
+- 読み込んだ掲載の台帳をローカルに保持し、物件名・住所・家賃の一致候補から紐づきを判断・再編集できるようにする。
+- JSON の書き出しと読み込みで、状態だけでなく掲載台帳と紐づき情報も救済できるようにする。
+
+## 保存方針
+- 正本の保存先は `chrome.storage.local` とする。
+- 状態は `homes_state_v1` に `listingId -> { color, comment, title, updatedAt }` で保持する。
+- 掲載台帳は `homes_listing_registry_v1` に `listingId -> { site, name, address, rent, fingerprint, lastSeenAt }` で保持する。
+- 手動の紐づき group は `homes_link_group_v1` に `listingId -> groupId` で保持する。
+- `groupId` がない掲載は、`auto:<fingerprint>` を実効 group として扱う。
+- `groupId` がある掲載は、その manual group を正本として扱う。
+- fingerprint は、正規化した `物件名 + 住所 + 家賃` から導く。
+- 正規化では全角/半角英数、空白、ハイフン、丁目/番地表記の揺れを吸収する。
+- 家賃は base rent のみを使い、管理費は fingerprint に含めない。
+- fingerprint を作れない掲載は自動候補を持たず、listingId 単位でのみ扱う。
+- 旧実装の `chrome.storage.sync` と旧 local key は初回だけ読み、`homes_state_v1` へ移行する。
+
+## 反映方針
+- ステータスとコメントは、現在の掲載が属する実効 group 全体へ同じ値を書き戻す。
+- `この掲載の紐づけを解除` は、現在の掲載だけを新しい manual group へ分離する。
+- 候補一覧の checkbox と `リンクを更新` は、選択された候補 group と現在の group を 1 つの manual group に統合する。
+- `リンクを更新` で候補未選択のまま実行した場合は、現在の掲載の manual group を外し、自動候補 group へ戻す。
+
+## JSONバックアップ方針
+- JSON書き出しは、状態、掲載台帳、紐づき group をまとめて出力する。
+- 書き出しファイル名は `rent-condition-notes-YYMMDD-HHMMSS.json` とし、状態データの `updatedAt` 最大値を基準にする。
+- 状態データが 1 件もない場合だけ、書き出し実行時刻へ fallback する。
+- 書き出し形式の正本は次とする。
+
+```json
+{
+  "schemaVersion": 2,
+  "exportedAt": 1713360000000,
+  "states": {
+    "room:a0649336242d91a967a399930c6e5ef1e6d33ebd": {
+      "color": "1",
+      "comment": "要確認",
+      "title": "サンプル物件",
+      "updatedAt": 1713350000000
+    }
+  },
+  "listings": {
+    "room:a0649336242d91a967a399930c6e5ef1e6d33ebd": {
+      "site": "homes-condition1",
+      "name": "サンプル物件",
+      "address": "東京都品川区南大井1-2-3",
+      "rent": "5.5万円",
+      "fingerprint": "sample|tokyo|5.5",
+      "lastSeenAt": 1713360000000
+    }
+  },
+  "linkGroups": {
+    "room:a0649336242d91a967a399930c6e5ef1e6d33ebd": "manual:abc123"
+  }
+}
+```
+
+- `schemaVersion: 1` の旧 JSON と、以前の「物件ID -> 状態」の素の JSON も引き続き読み込める。
+- `schemaVersion: 2` の読み込みでは `states` `listings` `linkGroups` をそれぞれ local へ復元する。
+- 同じ `listingId` が現在データと JSON の両方にある場合は、状態は `updatedAt` が新しい方、掲載台帳は `lastSeenAt` が新しい方を採用する。
+- JSON に存在しない現在データは削除しない。
+
+## UI方針
+- 各掲載 panel に `紐づき N件` を表示する。
+- `紐づけ一覧` には site、物件名、住所、家賃、状態ラベルを表示する。
+- linked な掲載は checked かつ操作不可で表示する。
+- 候補掲載は unchecked の checkbox で表示し、明示的に選んだものだけ再紐づけする。

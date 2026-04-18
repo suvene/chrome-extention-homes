@@ -1,8 +1,13 @@
 (() => {
   const LEGACY_STORAGE_KEY = 'homes_condition_notes_v1';
-  const SYNC_KEY_PREFIX = 'homes_condition_note_v2:';
+  const LEGACY_SYNC_KEY_PREFIX = 'homes_condition_note_v2:';
+  const STATE_STORAGE_KEY = 'homes_state_v1';
+  const LISTING_REGISTRY_STORAGE_KEY = 'homes_listing_registry_v1';
+  const LINK_GROUP_STORAGE_KEY = 'homes_link_group_v1';
   const LOCAL_FILTER_STORAGE_KEY = 'homes_header_filter_v1';
+  const LOCAL_MIGRATION_FLAG_KEY = 'homes_local_migration_v1';
   const COMMENT_SAVE_DEBOUNCE_MS = 700;
+  const REGISTRY_PERSIST_DEBOUNCE_MS = 400;
   const EXPORT_FILENAME_PREFIX = 'rent-condition-notes';
   const APP_TITLE = '賃貸物件 条件一覧アシスタント';
   const STATUS_OPTIONS = [
@@ -29,13 +34,17 @@
   const SITE_CONFIGS = [
     {
       id: 'homes-condition1',
+      label: 'HOME\'S',
       itemSelector: 'tr.prg-roomInfo[data-kykey]',
       matches: location =>
         location.hostname === 'www.homes.co.jp'
         && location.pathname.startsWith('/search/condition1/'),
-      getLookupStorageIds: getHomesLookupStorageIds,
-      getWriteStorageIds: getHomesWriteStorageIds,
+      getListingId: getHomesCanonicalListingId,
+      getLegacyLookupIds: getHomesLookupStorageIds,
       getTitle: getHomesTitle,
+      getName: getHomesName,
+      getAddress: getHomesAddress,
+      getRent: getHomesRent,
       getDecoratedElements: getHomesCondition1Rows,
       getPanel: getHomesCondition1Panel,
       mountPanel: mountHomesCondition1Panel,
@@ -50,13 +59,17 @@
     },
     {
       id: 'homes-condition-list',
+      label: 'HOME\'S',
       itemSelector: 'div.mod-newArrivalBuilding',
       matches: location =>
         location.hostname === 'www.homes.co.jp'
         && location.pathname.startsWith('/search/condition-list/'),
-      getLookupStorageIds: getHomesLookupStorageIds,
-      getWriteStorageIds: getHomesWriteStorageIds,
+      getListingId: getHomesCanonicalListingId,
+      getLegacyLookupIds: getHomesLookupStorageIds,
       getTitle: getHomesTitle,
+      getName: getHomesName,
+      getAddress: getHomesAddress,
+      getRent: getHomesRent,
       getDecoratedElements: card => [card],
       getPanel: getDefaultPanel,
       mountPanel: mountHomesDefaultPanel,
@@ -69,13 +82,17 @@
     },
     {
       id: 'suumo-fr301fc001',
+      label: 'SUUMO',
       itemSelector: 'table.cassetteitem_other > tbody',
       matches: location =>
         location.hostname === 'suumo.jp'
         && location.pathname.startsWith('/jj/chintai/ichiran/FR301FC001/'),
-      getLookupStorageIds: getSuumoLookupStorageIds,
-      getWriteStorageIds: getSuumoWriteStorageIds,
+      getListingId: getSuumoCanonicalListingId,
+      getLegacyLookupIds: getSuumoLookupStorageIds,
       getTitle: getSuumoTitle,
+      getName: getSuumoName,
+      getAddress: getSuumoAddress,
+      getRent: getSuumoRent,
       getDecoratedElements: card => [card],
       getPanel: getDefaultPanel,
       mountPanel: mountSuumoPanel,
@@ -89,39 +106,37 @@
     }
   ];
   const currentSite = detectCurrentSite();
-  let cache = {};
+  let stateCache = {};
+  let listingRegistry = {};
+  let linkGroupCache = {};
   let activeFilterValues = new Set(DEFAULT_FILTER_VALUES);
   const commentSaveTimers = new Map();
+  const linkSelectionCache = new Map();
   let isNextPageLoading = false;
+  let registryPersistTimerId = 0;
 
   if (!currentSite) {
     return;
   }
 
   async function loadAll() {
-    const [migratedCache, storedFilterValues] = await Promise.all([
-      migrateLegacyLocalData(),
-      loadStoredFilterValues()
+    await migrateLegacyStateIfNeeded();
+
+    const stored = await chrome.storage.local.get([
+      STATE_STORAGE_KEY,
+      LISTING_REGISTRY_STORAGE_KEY,
+      LINK_GROUP_STORAGE_KEY,
+      LOCAL_FILTER_STORAGE_KEY
     ]);
 
-    cache = migratedCache;
-    activeFilterValues = storedFilterValues;
+    stateCache = normalizeStateMap(stored[STATE_STORAGE_KEY]);
+    listingRegistry = normalizeListingRegistry(stored[LISTING_REGISTRY_STORAGE_KEY]);
+    linkGroupCache = normalizeLinkGroupMap(stored[LINK_GROUP_STORAGE_KEY]);
+    activeFilterValues = normalizeStoredFilterValues(stored[LOCAL_FILTER_STORAGE_KEY]);
   }
 
   function detectCurrentSite() {
     return SITE_CONFIGS.find(site => site.matches(window.location)) || null;
-  }
-
-  function getStorageKey(id) {
-    return `${SYNC_KEY_PREFIX}${id}`;
-  }
-
-  function isManagedStorageKey(key) {
-    return key.startsWith(SYNC_KEY_PREFIX);
-  }
-
-  function getIdFromStorageKey(key) {
-    return key.slice(SYNC_KEY_PREFIX.length);
   }
 
   function pushUnique(values, value) {
@@ -130,6 +145,83 @@
     const normalized = value.trim();
     if (!normalized || values.includes(normalized)) return;
     values.push(normalized);
+  }
+
+  function unique(values) {
+    return [...new Set(values.filter(Boolean))];
+  }
+
+  function escapeHtml(value) {
+    return String(value ?? '')
+      .replaceAll('&', '&amp;')
+      .replaceAll('<', '&lt;')
+      .replaceAll('>', '&gt;')
+      .replaceAll('"', '&quot;')
+      .replaceAll('\'', '&#39;');
+  }
+
+  function normalizeSpaces(value) {
+    return value.replace(/\s+/g, ' ').trim();
+  }
+
+  function normalizeText(value) {
+    if (typeof value !== 'string') return '';
+    return normalizeSpaces(value.normalize('NFKC'));
+  }
+
+  function normalizePropertyName(value) {
+    return normalizeText(value).toLowerCase();
+  }
+
+  function normalizeAddressText(value) {
+    const normalized = normalizeText(value)
+      .replace(/\s+/g, '')
+      .replace(/[‐‑‒–—―ー－ｰ]/g, '-')
+      .replace(/丁目/g, '-')
+      .replace(/番地/g, '-')
+      .replace(/番/g, '-')
+      .replace(/号/g, '')
+      .replace(/-+/g, '-')
+      .replace(/^-|-$/g, '');
+
+    return normalized.toLowerCase();
+  }
+
+  function normalizeRentText(value) {
+    const normalized = normalizeText(value).replace(/,/g, '');
+    const match = normalized.match(/(\d+(?:\.\d+)?)/);
+    return match?.[1] || '';
+  }
+
+  function buildListingFingerprint(name, address, rent) {
+    const normalizedName = normalizePropertyName(name);
+    const normalizedAddress = normalizeAddressText(address);
+    const normalizedRent = normalizeRentText(rent);
+
+    if (!normalizedName || !normalizedAddress || !normalizedRent) {
+      return '';
+    }
+
+    return `${normalizedName}|${normalizedAddress}|${normalizedRent}`;
+  }
+
+  function getSiteLabel(siteId) {
+    return SITE_CONFIGS.find(site => site.id === siteId)?.label || siteId || '不明';
+  }
+
+  function findDefinitionValue(root, labelText) {
+    if (!root) return '';
+
+    const rows = root.querySelectorAll('tr');
+    for (const row of rows) {
+      const heading = row.querySelector('th');
+      const value = row.querySelector('td');
+      if (!heading || !value) continue;
+      if (normalizeText(heading.textContent) !== labelText) continue;
+      return normalizeSpaces(value.textContent || '');
+    }
+
+    return '';
   }
 
   function getHomesCondition1Rows(card) {
@@ -179,11 +271,7 @@
     const nestedHrefId = parseHomesRoomIdFromHref(card.querySelector('[data-href]')?.dataset?.href);
     if (nestedHrefId) return nestedHrefId;
 
-    const detailLinks = [
-      ...card.querySelectorAll('a[href*="/chintai/room/"]')
-    ];
-
-    for (const link of detailLinks) {
+    for (const link of card.querySelectorAll('a[href*="/chintai/room/"]')) {
       const roomId = parseHomesRoomIdFromHref(link.href);
       if (roomId) return roomId;
     }
@@ -215,42 +303,56 @@
     return ids;
   }
 
-  function getHomesTitle(card) {
-    const title =
-      card?.querySelector('.bukkenName')?.textContent?.trim()
-      || card?.closest('.prg-unitListBody')?.querySelector('img[alt]')?.alt?.trim();
+  function getHomesCanonicalListingId(card) {
+    const roomId = getHomesRoomId(card);
+    if (roomId) return `room:${roomId}`;
 
-    if (title) return title;
+    const tykey = getHomesTyKey(card);
+    if (tykey) return `tykey:${tykey}`;
 
-    const floor = card?.querySelector('.roomKaisuu')?.textContent?.trim();
-    const roomNumber = card?.querySelector('.roomNumber')?.textContent?.trim();
-    const roomLabel = [floor, roomNumber].filter(Boolean).join(' ');
-
-    return roomLabel || '物件名不明';
+    return getHomesLegacyStorageIds(card)[0] || '';
   }
 
   function getHomesLookupStorageIds(card) {
     const ids = [];
-    const roomId = getHomesRoomId(card);
-    const tykey = getHomesTyKey(card);
-
-    pushUnique(ids, roomId ? `room:${roomId}` : '');
-    pushUnique(ids, tykey ? `tykey:${tykey}` : '');
+    pushUnique(ids, getHomesCanonicalListingId(card));
     getHomesLegacyStorageIds(card).forEach(id => pushUnique(ids, id));
-    pushUnique(ids, `title:${getHomesTitle(card)}`);
-
     return ids;
   }
 
-  function getHomesWriteStorageIds(card) {
-    const lookupIds = getHomesLookupStorageIds(card);
-    const roomId = lookupIds.find(id => id.startsWith('room:'));
-    if (roomId) return [roomId];
+  function getHomesName(card) {
+    return normalizeSpaces(card?.querySelector('.bukkenName')?.textContent || '');
+  }
 
-    const tykey = lookupIds.find(id => id.startsWith('tykey:'));
-    if (tykey) return [tykey];
+  function getHomesTitle(card) {
+    const title = getHomesName(card);
+    if (title) return title;
 
-    return [lookupIds[0]].filter(Boolean);
+    const floor = normalizeSpaces(card?.querySelector('.roomKaisuu, .floar')?.textContent || '');
+    const layout = normalizeSpaces(card?.querySelector('.layout')?.textContent || '');
+    const roomLabel = [floor, layout].filter(Boolean).join(' ');
+
+    return roomLabel || '物件名不明';
+  }
+
+  function getHomesAddress(card) {
+    const root =
+      card.closest('.moduleInner.prg-building')
+      || card.closest('.mod-newArrivalBuilding')
+      || card;
+
+    return findDefinitionValue(root, '所在地');
+  }
+
+  function getHomesRent(card) {
+    const priceLabel = normalizeSpaces(card.querySelector('.priceLabel')?.textContent || '');
+    if (priceLabel) return priceLabel;
+
+    const priceCell = normalizeSpaces(card.querySelector('.price')?.textContent || '');
+    const match = priceCell.match(/(\d+(?:\.\d+)?)\s*万円/);
+    if (match) return `${match[1]}万円`;
+
+    return '';
   }
 
   function getSuumoClipKey(card) {
@@ -261,7 +363,7 @@
     return card.querySelector('.js-cassette_link_href[href]') || null;
   }
 
-  function getSuumoRoomStorageId(card) {
+  function getSuumoCanonicalListingId(card) {
     const clipKey = getSuumoClipKey(card);
     if (clipKey) return `suumo-room:${clipKey}`;
 
@@ -269,19 +371,9 @@
     return bc ? `suumo-room:${bc}` : '';
   }
 
-  function getSuumoTitle(card) {
-    const buildingTitle = card?.closest('li')?.querySelector('.cassetteitem_content-title')?.textContent?.trim();
-    const firstRow = card?.querySelector('tr.js-cassette_link');
-    const floor = firstRow?.children?.[2]?.textContent?.trim() || '';
-    const layout = card?.querySelector('.cassetteitem_madori')?.textContent?.trim() || '';
-    const title = [buildingTitle, floor, layout].filter(Boolean).join(' ');
-
-    return title || buildingTitle || '物件名不明';
-  }
-
   function getSuumoLookupStorageIds(card) {
     const ids = [];
-    const canonicalId = getSuumoRoomStorageId(card);
+    const canonicalId = getSuumoCanonicalListingId(card);
     const detailLink = getSuumoDetailLink(card);
     const bc = parseSuumoBcFromHref(detailLink?.getAttribute('href'));
     const detailHref = detailLink?.href || '';
@@ -289,73 +381,83 @@
     pushUnique(ids, canonicalId);
     pushUnique(ids, bc ? `suumo-bc:${bc}` : '');
     pushUnique(ids, detailHref ? `suumo-href:${detailHref}` : '');
-    pushUnique(ids, `suumo-title:${getSuumoTitle(card)}`);
 
     return ids;
   }
 
-  function getSuumoWriteStorageIds(card) {
-    const canonicalId = getSuumoRoomStorageId(card);
-    if (canonicalId) return [canonicalId];
-
-    return [getSuumoLookupStorageIds(card)[0]].filter(Boolean);
+  function getSuumoName(card) {
+    return normalizeSpaces(card?.closest('li')?.querySelector('.cassetteitem_content-title')?.textContent || '');
   }
 
-  function getLookupStorageIds(card) {
-    return currentSite.getLookupStorageIds(card);
+  function getSuumoTitle(card) {
+    const title = getSuumoName(card);
+    if (title) return title;
+
+    const floor = normalizeSpaces(card.querySelector('tr.js-cassette_link td:nth-child(3)')?.textContent || '');
+    const layout = normalizeSpaces(card.querySelector('.cassetteitem_madori')?.textContent || '');
+
+    return [title, floor, layout].filter(Boolean).join(' ') || '物件名不明';
   }
 
-  function getWriteStorageIds(card) {
-    return currentSite.getWriteStorageIds(card);
+  function getSuumoAddress(card) {
+    return normalizeSpaces(card.closest('li')?.querySelector('.cassetteitem_detail-col1')?.textContent || '');
   }
 
-  function setCardStorageIds(card) {
-    const writeIds = getWriteStorageIds(card).filter(Boolean);
-    const lookupIds = getLookupStorageIds(card).filter(Boolean);
-
-    card.dataset.hcId = writeIds[0] || '';
-    card.dataset.hcWriteIds = JSON.stringify(writeIds);
-    card.dataset.hcLookupIds = JSON.stringify(lookupIds);
-
-    return { writeIds, lookupIds };
+  function getSuumoRent(card) {
+    return normalizeSpaces(card.querySelector('.cassetteitem_price--rent')?.textContent || '');
   }
 
-  function getCardStorageIds(card) {
-    const serializedWriteIds = card.dataset.hcWriteIds;
+  function buildCardIdentity(card) {
+    const listingId = currentSite.getListingId(card);
+    const lookupIds = unique([listingId, ...currentSite.getLegacyLookupIds(card)]);
+    const name = currentSite.getName(card);
+    const address = currentSite.getAddress(card);
+    const rent = currentSite.getRent(card);
+
+    return {
+      listingId,
+      lookupIds,
+      title: currentSite.getTitle(card),
+      record: {
+        site: currentSite.id,
+        name,
+        address,
+        rent,
+        fingerprint: buildListingFingerprint(name, address, rent),
+        lastSeenAt: Date.now()
+      }
+    };
+  }
+
+  function setCardIdentity(card) {
+    const identity = buildCardIdentity(card);
+    card.dataset.hcListingId = identity.listingId || '';
+    card.dataset.hcLookupIds = JSON.stringify(identity.lookupIds);
+    return identity;
+  }
+
+  function getCardIdentity(card) {
+    const listingId = card.dataset.hcListingId;
     const serializedLookupIds = card.dataset.hcLookupIds;
 
-    if (serializedWriteIds && serializedLookupIds) {
+    if (listingId && serializedLookupIds) {
       try {
-        const writeIds = JSON.parse(serializedWriteIds);
         const lookupIds = JSON.parse(serializedLookupIds);
-
-        if (
-          Array.isArray(writeIds)
-          && writeIds.length > 0
-          && Array.isArray(lookupIds)
-          && lookupIds.length > 0
-        ) {
-          return { writeIds, lookupIds };
+        if (Array.isArray(lookupIds) && lookupIds.length > 0) {
+          const record = buildCardIdentity(card).record;
+          return {
+            listingId,
+            lookupIds,
+            title: currentSite.getTitle(card),
+            record
+          };
         }
       } catch (error) {
-        console.warn('Failed to parse cached storage ids', error);
+        console.warn('Failed to parse cached card identity', error);
       }
     }
 
-    return setCardStorageIds(card);
-  }
-
-  function getTitle(card) {
-    return currentSite.getTitle(card);
-  }
-
-  function getDefaultState(card) {
-    return {
-      color: '0',
-      comment: '',
-      title: getTitle(card),
-      updatedAt: 0
-    };
+    return setCardIdentity(card);
   }
 
   function normalizeStatusValue(rawColor) {
@@ -364,42 +466,71 @@
     return LEGACY_STATUS_MAP[rawColor] || '0';
   }
 
-  function normalizeState(state, card) {
-    const fallback = getDefaultState(card);
-    const updatedAt = Number(state?.updatedAt);
+  function normalizeState(rawState, defaultTitle = '物件名不明') {
+    const updatedAt = Number(rawState?.updatedAt);
 
     return {
-      color: normalizeStatusValue(state?.color),
-      comment: typeof state?.comment === 'string' ? state.comment : '',
-      title: typeof state?.title === 'string' && state.title.trim() ? state.title : fallback.title,
-      updatedAt: Number.isFinite(updatedAt) ? updatedAt : fallback.updatedAt
+      color: normalizeStatusValue(rawState?.color),
+      comment: typeof rawState?.comment === 'string' ? rawState.comment : '',
+      title: typeof rawState?.title === 'string' && rawState.title.trim()
+        ? rawState.title
+        : defaultTitle,
+      updatedAt: Number.isFinite(updatedAt) ? updatedAt : 0
     };
   }
 
-  function getResolvedState(card, ids = getCardStorageIds(card).lookupIds) {
-    for (const id of ids) {
-      if (cache[id]) {
-        return {
-          id,
-          state: normalizeState(cache[id], card)
-        };
-      }
+  function normalizeStateMap(rawStates) {
+    if (!rawStates || typeof rawStates !== 'object' || Array.isArray(rawStates)) {
+      return {};
     }
 
-    return {
-      id: ids[0] || '',
-      state: getDefaultState(card)
-    };
+    return Object.fromEntries(
+      Object.entries(rawStates)
+        .filter(([id]) => typeof id === 'string' && id.trim())
+        .map(([id, rawState]) => [id, normalizeState(rawState)])
+        .filter(([, state]) => !isDefaultState(state))
+    );
   }
 
-  function syncCacheForIds(ids, rawState, card) {
-    const normalized = normalizeState(rawState, card);
+  function normalizeListingRecord(record) {
+    const normalized = {
+      site: typeof record?.site === 'string' ? record.site : '',
+      name: typeof record?.name === 'string' ? record.name.trim() : '',
+      address: typeof record?.address === 'string' ? record.address.trim() : '',
+      rent: typeof record?.rent === 'string' ? record.rent.trim() : '',
+      fingerprint: typeof record?.fingerprint === 'string' ? record.fingerprint.trim() : '',
+      lastSeenAt: Number.isFinite(Number(record?.lastSeenAt)) ? Number(record.lastSeenAt) : 0
+    };
 
-    ids.forEach(id => {
-      cache[id] = normalized;
-    });
+    if (!normalized.fingerprint) {
+      normalized.fingerprint = buildListingFingerprint(normalized.name, normalized.address, normalized.rent);
+    }
 
     return normalized;
+  }
+
+  function normalizeListingRegistry(rawRegistry) {
+    if (!rawRegistry || typeof rawRegistry !== 'object' || Array.isArray(rawRegistry)) {
+      return {};
+    }
+
+    return Object.fromEntries(
+      Object.entries(rawRegistry)
+        .filter(([listingId]) => typeof listingId === 'string' && listingId.trim())
+        .map(([listingId, record]) => [listingId, normalizeListingRecord(record)])
+    );
+  }
+
+  function normalizeLinkGroupMap(rawGroups) {
+    if (!rawGroups || typeof rawGroups !== 'object' || Array.isArray(rawGroups)) {
+      return {};
+    }
+
+    return Object.fromEntries(
+      Object.entries(rawGroups)
+        .filter(([listingId, groupId]) => typeof listingId === 'string' && listingId.trim() && typeof groupId === 'string' && groupId.trim())
+        .map(([listingId, groupId]) => [listingId, groupId.trim()])
+    );
   }
 
   function isDefaultState(state) {
@@ -420,65 +551,87 @@
     return incoming.updatedAt >= current.updatedAt ? incoming : current;
   }
 
-  function extractManagedStates(storageItems) {
+  function pickNewerListingRecord(current, incoming) {
+    if (!current) return incoming;
+    return incoming.lastSeenAt >= current.lastSeenAt ? incoming : current;
+  }
+
+  function buildStoredStateMap(states = stateCache) {
+    return Object.fromEntries(
+      Object.entries(states)
+        .map(([listingId, rawState]) => [listingId, normalizeState(rawState)])
+        .filter(([, state]) => !isDefaultState(state))
+    );
+  }
+
+  function buildStoredLinkGroupMap(groups = linkGroupCache) {
+    return normalizeLinkGroupMap(groups);
+  }
+
+  function buildStoredListingRegistry(registry = listingRegistry) {
+    return normalizeListingRegistry(registry);
+  }
+
+  function extractLegacySyncStates(storageItems) {
     const states = {};
 
     Object.entries(storageItems).forEach(([key, value]) => {
-      if (!isManagedStorageKey(key)) return;
-
-      states[getIdFromStorageKey(key)] = normalizeState(value);
+      if (!key.startsWith(LEGACY_SYNC_KEY_PREFIX)) return;
+      states[key.slice(LEGACY_SYNC_KEY_PREFIX.length)] = normalizeState(value);
     });
 
     return states;
   }
 
-  async function loadSyncStates() {
-    const syncItems = await chrome.storage.sync.get(null);
-    return extractManagedStates(syncItems);
-  }
-
-  async function writeStatesToSync(states) {
-    const payload = {};
-
-    Object.entries(states).forEach(([id, rawState]) => {
-      const state = normalizeState(rawState);
-      if (isDefaultState(state)) return;
-      payload[getStorageKey(id)] = state;
-    });
-
-    if (Object.keys(payload).length === 0) return;
-    await chrome.storage.sync.set(payload);
-  }
-
-  async function migrateLegacyLocalData() {
-    const [syncStates, legacyResult] = await Promise.all([
-      loadSyncStates(),
-      chrome.storage.local.get(LEGACY_STORAGE_KEY)
+  async function migrateLegacyStateIfNeeded() {
+    const stored = await chrome.storage.local.get([
+      LOCAL_MIGRATION_FLAG_KEY,
+      STATE_STORAGE_KEY,
+      LEGACY_STORAGE_KEY
     ]);
-    const legacyStates = legacyResult[LEGACY_STORAGE_KEY] || {};
-    const mergedStates = { ...syncStates };
-    let hasSyncChanges = false;
 
-    Object.entries(legacyStates).forEach(([id, rawState]) => {
-      const normalized = normalizeState(rawState);
-      if (isDefaultState(normalized)) return;
+    if (stored[LOCAL_MIGRATION_FLAG_KEY]) {
+      return;
+    }
 
-      const merged = pickNewerState(mergedStates[id], normalized);
-      if (!statesEqual(mergedStates[id], merged)) {
-        mergedStates[id] = merged;
-        hasSyncChanges = true;
+    let mergedStates = normalizeStateMap(stored[STATE_STORAGE_KEY]);
+    let hasChanges = Object.keys(mergedStates).length > 0;
+
+    try {
+      const syncItems = await chrome.storage.sync.get(null);
+      Object.entries(extractLegacySyncStates(syncItems)).forEach(([listingId, state]) => {
+        const merged = pickNewerState(mergedStates[listingId], state);
+        if (!statesEqual(mergedStates[listingId], merged)) {
+          mergedStates[listingId] = merged;
+          hasChanges = true;
+        }
+      });
+    } catch (error) {
+      console.warn('Failed to read legacy sync states', error);
+    }
+
+    const legacyStates = normalizeStateMap(stored[LEGACY_STORAGE_KEY]);
+    Object.entries(legacyStates).forEach(([listingId, state]) => {
+      const merged = pickNewerState(mergedStates[listingId], state);
+      if (!statesEqual(mergedStates[listingId], merged)) {
+        mergedStates[listingId] = merged;
+        hasChanges = true;
       }
     });
 
-    if (hasSyncChanges) {
-      await writeStatesToSync(mergedStates);
+    const payload = {
+      [LOCAL_MIGRATION_FLAG_KEY]: true
+    };
+
+    if (hasChanges) {
+      payload[STATE_STORAGE_KEY] = buildStoredStateMap(mergedStates);
     }
 
-    if (Object.keys(legacyStates).length > 0) {
+    await chrome.storage.local.set(payload);
+
+    if (stored[LEGACY_STORAGE_KEY]) {
       await chrome.storage.local.remove(LEGACY_STORAGE_KEY);
     }
-
-    return mergedStates;
   }
 
   function normalizeStoredFilterValues(rawValues) {
@@ -493,108 +646,229 @@
     );
   }
 
-  async function loadStoredFilterValues() {
-    const stored = await chrome.storage.local.get(LOCAL_FILTER_STORAGE_KEY);
-    return normalizeStoredFilterValues(stored[LOCAL_FILTER_STORAGE_KEY]);
-  }
-
   async function persistFilterValues() {
     await chrome.storage.local.set({
       [LOCAL_FILTER_STORAGE_KEY]: [...activeFilterValues]
     });
   }
 
-  function normalizeIds(idsOrId) {
-    if (Array.isArray(idsOrId)) {
-      return [...new Set(idsOrId.filter(Boolean))];
-    }
-
-    if (typeof idsOrId === 'string' && idsOrId.trim()) {
-      const pendingIds = commentSaveTimers.get(idsOrId)?.ids;
-      return pendingIds ? [...new Set(pendingIds.filter(Boolean))] : [idsOrId];
-    }
-
-    return [];
+  async function persistStateCache() {
+    await chrome.storage.local.set({
+      [STATE_STORAGE_KEY]: buildStoredStateMap()
+    });
   }
 
-  async function persistState(ids) {
-    const normalizedIds = normalizeIds(ids);
-    if (normalizedIds.length === 0) return;
+  async function persistLinkGroupCache() {
+    await chrome.storage.local.set({
+      [LINK_GROUP_STORAGE_KEY]: buildStoredLinkGroupMap()
+    });
+  }
 
-    const primaryId = normalizedIds[0];
-    const state = normalizeState(cache[primaryId]);
-
-    if (isDefaultState(state)) {
-      normalizedIds.forEach(id => {
-        delete cache[id];
+  function scheduleRegistryPersist() {
+    window.clearTimeout(registryPersistTimerId);
+    registryPersistTimerId = window.setTimeout(() => {
+      void chrome.storage.local.set({
+        [LISTING_REGISTRY_STORAGE_KEY]: buildStoredListingRegistry()
+      }).catch(error => {
+        console.error('Failed to persist listing registry', error);
       });
-      await chrome.storage.sync.remove(normalizedIds.map(getStorageKey));
+    }, REGISTRY_PERSIST_DEBOUNCE_MS);
+  }
+
+  function upsertListingRecord(listingId, record) {
+    if (!listingId) return;
+
+    const normalized = normalizeListingRecord(record);
+    const merged = pickNewerListingRecord(listingRegistry[listingId], normalized);
+    const current = listingRegistry[listingId];
+
+    if (
+      current
+      && current.site === merged.site
+      && current.name === merged.name
+      && current.address === merged.address
+      && current.rent === merged.rent
+      && current.fingerprint === merged.fingerprint
+      && current.lastSeenAt === merged.lastSeenAt
+    ) {
       return;
     }
 
-    const payload = {};
+    listingRegistry[listingId] = merged;
+    scheduleRegistryPersist();
+  }
 
-    normalizedIds.forEach(id => {
-      cache[id] = state;
-      payload[getStorageKey(id)] = state;
+  function getDefaultState(card) {
+    return normalizeState({}, currentSite.getTitle(card));
+  }
+
+  function getAutoGroupId(fingerprint) {
+    return fingerprint ? `auto:${fingerprint}` : '';
+  }
+
+  function getSoloGroupId(listingId) {
+    return listingId ? `solo:${listingId}` : '';
+  }
+
+  function getEffectiveGroupId(listingId) {
+    if (!listingId) return '';
+
+    const manualGroupId = linkGroupCache[listingId];
+    if (manualGroupId) return manualGroupId;
+
+    const fingerprint = listingRegistry[listingId]?.fingerprint || '';
+    return getAutoGroupId(fingerprint) || getSoloGroupId(listingId);
+  }
+
+  function getGroupMembersByGroupId(groupId) {
+    if (!groupId) return [];
+
+    if (groupId.startsWith('solo:')) {
+      const listingId = groupId.slice('solo:'.length);
+      return listingId ? [listingId] : [];
+    }
+
+    return Object.keys(listingRegistry)
+      .filter(listingId => getEffectiveGroupId(listingId) === groupId);
+  }
+
+  function getLinkedListingIds(listingId) {
+    return unique(getGroupMembersByGroupId(getEffectiveGroupId(listingId)));
+  }
+
+  function getCandidateListingIds(listingId) {
+    const currentRecord = listingRegistry[listingId];
+    const linkedIds = new Set(getLinkedListingIds(listingId));
+    const candidateIds = [];
+
+    if (currentRecord?.fingerprint) {
+      Object.entries(listingRegistry).forEach(([candidateId, record]) => {
+        if (candidateId === listingId) return;
+        if (!record.fingerprint || record.fingerprint !== currentRecord.fingerprint) return;
+        if (linkedIds.has(candidateId)) return;
+        candidateIds.push(candidateId);
+      });
+    }
+
+    return unique(candidateIds);
+  }
+
+  function getBestResolvedState(ids, defaultTitle) {
+    let resolvedId = '';
+    let resolvedState = normalizeState({}, defaultTitle);
+
+    ids.forEach(id => {
+      const candidate = stateCache[id];
+      if (!candidate) return;
+
+      const normalized = normalizeState(candidate, defaultTitle);
+      if (!resolvedId || normalized.updatedAt >= resolvedState.updatedAt) {
+        resolvedId = id;
+        resolvedState = normalized;
+      }
     });
 
-    await chrome.storage.sync.set(payload);
+    return {
+      id: resolvedId,
+      state: resolvedState
+    };
   }
 
-  function schedulePersist(ids) {
-    const normalizedIds = normalizeIds(ids);
-    const primaryId = normalizedIds[0];
-    if (!primaryId) return;
+  function getResolvedState(card) {
+    const identity = getCardIdentity(card);
+    const linkedIds = getLinkedListingIds(identity.listingId);
+    const candidateIds = unique([...linkedIds, ...identity.lookupIds]);
 
-    clearScheduledPersist(primaryId);
+    return getBestResolvedState(candidateIds, identity.title);
+  }
+
+  async function writeStateForListingIds(listingIds, rawState, defaultTitle = '物件名不明') {
+    const normalizedIds = unique(listingIds);
+    if (normalizedIds.length === 0) return;
+
+    const state = normalizeState(rawState, defaultTitle);
+
+    if (isDefaultState(state)) {
+      normalizedIds.forEach(id => {
+        delete stateCache[id];
+      });
+    } else {
+      normalizedIds.forEach(id => {
+        stateCache[id] = state;
+      });
+    }
+
+    await persistStateCache();
+  }
+
+  async function persistStateForListingId(listingId, defaultTitle) {
+    if (!listingId) return;
+
+    const state = normalizeState(stateCache[listingId], defaultTitle);
+    const linkedIds = getLinkedListingIds(listingId);
+    const targetIds = linkedIds.length > 0 ? linkedIds : [listingId];
+
+    await writeStateForListingIds(targetIds, state, defaultTitle);
+  }
+
+  function schedulePersist(listingId) {
+    if (!listingId) return;
+
+    clearScheduledPersist(listingId);
 
     const timerId = window.setTimeout(async () => {
-      const pending = commentSaveTimers.get(primaryId);
-      commentSaveTimers.delete(primaryId);
-      await persistState(pending?.ids || normalizedIds);
+      const pending = commentSaveTimers.get(listingId);
+      commentSaveTimers.delete(listingId);
+      await persistStateForListingId(listingId, pending?.defaultTitle || '物件名不明');
     }, COMMENT_SAVE_DEBOUNCE_MS);
 
-    commentSaveTimers.set(primaryId, { timerId, ids: normalizedIds });
+    commentSaveTimers.set(listingId, {
+      timerId,
+      defaultTitle: listingRegistry[listingId]?.name || '物件名不明'
+    });
   }
 
-  function clearScheduledPersist(id) {
-    const pending = commentSaveTimers.get(id);
+  function clearScheduledPersist(listingId) {
+    const pending = commentSaveTimers.get(listingId);
     if (!pending) return;
 
     window.clearTimeout(pending.timerId);
-    commentSaveTimers.delete(id);
+    commentSaveTimers.delete(listingId);
   }
 
-  async function flushScheduledPersist(ids) {
-    const normalizedIds = normalizeIds(ids);
-    const primaryId = normalizedIds[0];
-    if (!primaryId) return;
+  async function flushScheduledPersist(listingId, defaultTitle = '物件名不明') {
+    if (!listingId) return;
 
-    clearScheduledPersist(primaryId);
-    await persistState(normalizedIds);
+    clearScheduledPersist(listingId);
+    await persistStateForListingId(listingId, defaultTitle);
   }
 
   async function flushAllScheduledPersists() {
-    const ids = [...commentSaveTimers.keys()];
-    for (const id of ids) {
-      await flushScheduledPersist(id);
+    const listingIds = [...commentSaveTimers.keys()];
+    for (const listingId of listingIds) {
+      await flushScheduledPersist(listingId, listingRegistry[listingId]?.name || '物件名不明');
     }
   }
 
-  function getExportableCache() {
-    return Object.fromEntries(
-      Object.entries(cache)
-        .map(([id, rawState]) => [id, normalizeState(rawState)])
-        .filter(([, state]) => !isDefaultState(state))
-    );
+  function getExportableStates() {
+    return buildStoredStateMap();
+  }
+
+  function getExportableListings() {
+    return buildStoredListingRegistry();
+  }
+
+  function getExportableLinkGroups() {
+    return buildStoredLinkGroupMap();
   }
 
   function buildExportPayload() {
     return {
-      schemaVersion: 1,
+      schemaVersion: 2,
       exportedAt: Date.now(),
-      states: getExportableCache()
+      states: getExportableStates(),
+      listings: getExportableListings(),
+      linkGroups: getExportableLinkGroups()
     };
   }
 
@@ -614,6 +888,20 @@
   }
 
   function parseImportPayload(parsedJson) {
+    if (
+      parsedJson
+      && typeof parsedJson === 'object'
+      && !Array.isArray(parsedJson)
+      && parsedJson.schemaVersion === 2
+    ) {
+      return {
+        schemaVersion: 2,
+        states: normalizeStateMap(parsedJson.states),
+        listings: normalizeListingRegistry(parsedJson.listings),
+        linkGroups: normalizeLinkGroupMap(parsedJson.linkGroups)
+      };
+    }
+
     const rawStates =
       parsedJson
       && typeof parsedJson === 'object'
@@ -629,12 +917,12 @@
       throw new Error('JSON format is invalid.');
     }
 
-    return Object.fromEntries(
-      Object.entries(rawStates)
-        .filter(([id]) => typeof id === 'string' && id.trim())
-        .map(([id, rawState]) => [id, normalizeState(rawState)])
-        .filter(([, state]) => !isDefaultState(state))
-    );
+    return {
+      schemaVersion: 1,
+      states: normalizeStateMap(rawStates),
+      listings: {},
+      linkGroups: {}
+    };
   }
 
   function downloadJson(filename, payload) {
@@ -660,25 +948,66 @@
     await flushAllScheduledPersists();
 
     const text = await file.text();
-    const importedStates = parseImportPayload(JSON.parse(text));
-    const changedStates = {};
+    const imported = parseImportPayload(JSON.parse(text));
+    const nextStates = { ...stateCache };
+    const nextListings = { ...listingRegistry };
+    const nextLinkGroups = { ...linkGroupCache };
+    let changedStateCount = 0;
+    let changedListingCount = 0;
+    let changedLinkCount = 0;
 
-    Object.entries(importedStates).forEach(([id, state]) => {
-      const mergedState = pickNewerState(cache[id], state);
-      if (!statesEqual(cache[id], mergedState)) {
-        cache[id] = mergedState;
-        changedStates[id] = mergedState;
+    Object.entries(imported.states).forEach(([listingId, state]) => {
+      const merged = pickNewerState(nextStates[listingId], state);
+      if (!statesEqual(nextStates[listingId], merged)) {
+        nextStates[listingId] = merged;
+        changedStateCount += 1;
       }
     });
 
-    if (Object.keys(changedStates).length === 0) {
-      window.alert('取り込める新しいステータスはありませんでした。');
+    Object.entries(imported.listings).forEach(([listingId, record]) => {
+      const merged = pickNewerListingRecord(nextListings[listingId], record);
+      const current = nextListings[listingId];
+
+      if (
+        !current
+        || current.site !== merged.site
+        || current.name !== merged.name
+        || current.address !== merged.address
+        || current.rent !== merged.rent
+        || current.fingerprint !== merged.fingerprint
+        || current.lastSeenAt !== merged.lastSeenAt
+      ) {
+        nextListings[listingId] = merged;
+        changedListingCount += 1;
+      }
+    });
+
+    Object.entries(imported.linkGroups).forEach(([listingId, groupId]) => {
+      if (nextLinkGroups[listingId] !== groupId) {
+        nextLinkGroups[listingId] = groupId;
+        changedLinkCount += 1;
+      }
+    });
+
+    if (changedStateCount === 0 && changedListingCount === 0 && changedLinkCount === 0) {
+      window.alert('取り込める新しい状態や紐づきはありませんでした。');
       return;
     }
 
-    await writeStatesToSync(changedStates);
+    stateCache = nextStates;
+    listingRegistry = nextListings;
+    linkGroupCache = nextLinkGroups;
+
+    await chrome.storage.local.set({
+      [STATE_STORAGE_KEY]: buildStoredStateMap(stateCache),
+      [LISTING_REGISTRY_STORAGE_KEY]: buildStoredListingRegistry(listingRegistry),
+      [LINK_GROUP_STORAGE_KEY]: buildStoredLinkGroupMap(linkGroupCache)
+    });
+
     refreshAllCards();
-    window.alert(`${Object.keys(changedStates).length} 件のステータスをJSONから取り込みました。`);
+    window.alert(
+      `${changedStateCount} 件の状態、${changedListingCount} 件の掲載台帳、${changedLinkCount} 件の紐づきをJSONから取り込みました。`
+    );
   }
 
   function getStatusOption(value) {
@@ -708,7 +1037,7 @@
   }
 
   function getLastUpdatedAt() {
-    return Object.values(cache).reduce((latest, rawState) => {
+    return Object.values(stateCache).reduce((latest, rawState) => {
       const normalized = normalizeState(rawState);
       return normalized.updatedAt > latest ? normalized.updatedAt : latest;
     }, 0);
@@ -739,7 +1068,7 @@
       return '保存待ちの変更があります';
     }
 
-    return '同期ストレージに保存済み';
+    return 'ローカルに保存済み';
   }
 
   function updateToolbarSyncStatus() {
@@ -1077,7 +1406,7 @@
     const buildingContainers = new Set();
 
     document.querySelectorAll(currentSite.itemSelector).forEach(card => {
-      const state = getResolvedState(card, getCardStorageIds(card).lookupIds).state;
+      const state = getResolvedState(card).state;
       const isVisible = activeFilterValues.has(state.color);
 
       getDecoratedElements(card).forEach(element => {
@@ -1091,6 +1420,133 @@
     });
 
     syncBuildingVisibility(buildingContainers);
+  }
+
+  function getLinkSelection(listingId) {
+    return new Set(linkSelectionCache.get(listingId) || []);
+  }
+
+  function setLinkSelection(listingId, selectedIds) {
+    const normalized = unique(selectedIds);
+    if (normalized.length === 0) {
+      linkSelectionCache.delete(listingId);
+      return;
+    }
+
+    linkSelectionCache.set(listingId, normalized);
+  }
+
+  function clearLinkSelection(listingId) {
+    linkSelectionCache.delete(listingId);
+  }
+
+  function buildLinkListRows(card) {
+    const identity = getCardIdentity(card);
+    const linkedIds = getLinkedListingIds(identity.listingId);
+    const linkedSet = new Set(linkedIds);
+    const candidateIds = getCandidateListingIds(identity.listingId);
+    const selectedCandidates = getLinkSelection(identity.listingId);
+    const rows = [];
+
+    rows.push({
+      listingId: identity.listingId,
+      record: listingRegistry[identity.listingId] || identity.record,
+      status: '現在',
+      checked: true,
+      disabled: true,
+      selectable: false
+    });
+
+    linkedIds
+      .filter(listingId => listingId !== identity.listingId)
+      .forEach(listingId => {
+        rows.push({
+          listingId,
+          record: listingRegistry[listingId],
+          status: '紐づき中',
+          checked: true,
+          disabled: true,
+          selectable: false
+        });
+      });
+
+    candidateIds.forEach(listingId => {
+      rows.push({
+        listingId,
+        record: listingRegistry[listingId],
+        status: '候補',
+        checked: selectedCandidates.has(listingId),
+        disabled: false,
+        selectable: true
+      });
+    });
+
+    return {
+      linkedCount: linkedSet.size || 1,
+      rows
+    };
+  }
+
+  function renderLinkListMarkup(card) {
+    const { rows } = buildLinkListRows(card);
+
+    if (rows.length === 0) {
+      return '<p class="hc-link-empty">候補はまだありません。</p>';
+    }
+
+    return rows.map(row => {
+      const record = row.record || {};
+      const siteLabel = getSiteLabel(record.site);
+      const name = record.name || '物件名不明';
+      const address = record.address || '住所不明';
+      const rent = record.rent || '家賃不明';
+
+      return `
+        <label class="hc-link-item ${row.disabled ? 'is-locked' : 'is-selectable'}">
+          <input
+            type="checkbox"
+            class="hc-link-candidate-checkbox"
+            value="${escapeHtml(row.listingId)}"
+            ${row.checked ? 'checked' : ''}
+            ${row.disabled ? 'disabled' : ''}
+          >
+          <span class="hc-link-meta">
+            <span class="hc-link-badges">
+              <span class="hc-link-status">${escapeHtml(row.status)}</span>
+              <span class="hc-link-site">${escapeHtml(siteLabel)}</span>
+            </span>
+            <span class="hc-link-text">
+              <strong>${escapeHtml(name)}</strong>
+              <span>${escapeHtml(address)}</span>
+              <span>${escapeHtml(rent)}</span>
+            </span>
+          </span>
+        </label>
+      `;
+    }).join('');
+  }
+
+  function syncLinkPanel(card) {
+    const identity = getCardIdentity(card);
+    const panel = currentSite.getPanel(card);
+    if (!panel) return;
+
+    const linkCount = buildLinkListRows(card).linkedCount;
+    const linkCountElement = panel.querySelector('[data-hc-link-count]');
+    const linkListElement = panel.querySelector('[data-hc-link-list]');
+    const unlinkButton = panel.querySelector('.hc-unlink-button');
+
+    if (linkCountElement) {
+      linkCountElement.textContent = `紐づき ${linkCount}件`;
+    }
+
+    if (linkListElement) {
+      linkListElement.innerHTML = renderLinkListMarkup(card);
+    }
+
+    if (unlinkButton) {
+      unlinkButton.disabled = getLinkedListingIds(identity.listingId).length <= 1;
+    }
   }
 
   function syncPanel(card, state) {
@@ -1107,22 +1563,24 @@
     if (commentArea && commentArea.value !== (state.comment || '')) {
       commentArea.value = state.comment || '';
     }
+
+    syncLinkPanel(card);
   }
 
   function refreshCard(card) {
-    const { writeIds, lookupIds } = setCardStorageIds(card);
-    const resolved = getResolvedState(card, lookupIds);
-    const state = resolved.state;
+    const identity = getCardIdentity(card);
+    const resolved = getResolvedState(card);
+    const state = normalizeState(resolved.state, identity.title);
 
     if (
       resolved.id
-      && resolved.id !== writeIds[0]
-      && !resolved.id.startsWith('tykey:')
+      && resolved.id !== identity.listingId
+      && identity.lookupIds.includes(resolved.id)
       && !isDefaultState(state)
     ) {
-      syncCacheForIds(writeIds, state, card);
-      void persistState(writeIds).catch(error => {
-        console.error('Failed to backfill canonical status keys', error);
+      stateCache[identity.listingId] = state;
+      void persistStateCache().catch(error => {
+        console.error('Failed to backfill canonical local state key', error);
       });
     }
 
@@ -1136,7 +1594,65 @@
     updateToolbarSyncStatus();
   }
 
-  function createPanel(card, ids, state) {
+  function createManualGroupId() {
+    return `manual:${Date.now().toString(36)}:${Math.random().toString(36).slice(2, 8)}`;
+  }
+
+  async function unlinkCurrentListing(card) {
+    const identity = getCardIdentity(card);
+    const linkedIds = getLinkedListingIds(identity.listingId);
+    const resolvedState = getResolvedState(card).state;
+
+    if (linkedIds.length <= 1) {
+      return;
+    }
+
+    linkGroupCache[identity.listingId] = createManualGroupId();
+    clearLinkSelection(identity.listingId);
+
+    await persistLinkGroupCache();
+    await writeStateForListingIds([identity.listingId], resolvedState, identity.title);
+    refreshAllCards();
+  }
+
+  async function applyLinkSelection(card) {
+    const identity = getCardIdentity(card);
+    const selectedIds = [...getLinkSelection(identity.listingId)];
+
+    if (selectedIds.length === 0) {
+      delete linkGroupCache[identity.listingId];
+      await persistLinkGroupCache();
+      refreshAllCards();
+      return;
+    }
+
+    const unifiedListingIds = new Set(getLinkedListingIds(identity.listingId));
+    unifiedListingIds.add(identity.listingId);
+
+    selectedIds.forEach(listingId => {
+      getLinkedListingIds(listingId).forEach(memberId => {
+        unifiedListingIds.add(memberId);
+      });
+      unifiedListingIds.add(listingId);
+    });
+
+    const nextGroupId = createManualGroupId();
+    [...unifiedListingIds].forEach(listingId => {
+      linkGroupCache[listingId] = nextGroupId;
+    });
+
+    const mergedState = getBestResolvedState(
+      [...unifiedListingIds],
+      identity.title
+    ).state;
+
+    clearLinkSelection(identity.listingId);
+    await persistLinkGroupCache();
+    await writeStateForListingIds([...unifiedListingIds], mergedState, identity.title);
+    refreshAllCards();
+  }
+
+  function createPanel(card, listingId, state) {
     const panel = document.createElement('div');
     panel.className = 'hc-panel';
 
@@ -1155,45 +1671,87 @@
       <div class="hc-panel-row">
         <textarea class="hc-comment" rows="2" placeholder="コメントを入力"></textarea>
       </div>
+
+      <div class="hc-panel-row hc-panel-row-links">
+        <div class="hc-link-toolbar">
+          <strong data-hc-link-count>紐づき 1件</strong>
+          <button type="button" class="hc-link-update-button">リンクを更新</button>
+          <button type="button" class="hc-unlink-button">この掲載の紐づけを解除</button>
+        </div>
+      </div>
+
+      <div class="hc-panel-row hc-panel-row-links-list">
+        <div class="hc-link-list-heading">紐づけ一覧</div>
+        <div class="hc-link-list" data-hc-link-list></div>
+      </div>
     `;
 
     const colorSelect = panel.querySelector('.hc-color-select');
     const commentArea = panel.querySelector('.hc-comment');
-    const primaryId = ids[0];
+    const linkList = panel.querySelector('[data-hc-link-list]');
+    const updateButton = panel.querySelector('.hc-link-update-button');
+    const unlinkButton = panel.querySelector('.hc-unlink-button');
 
     colorSelect.value = state.color;
     commentArea.value = state.comment || '';
 
     colorSelect.addEventListener('change', async () => {
-      const { lookupIds } = getCardStorageIds(card);
+      const identity = getCardIdentity(card);
       const nextState = {
-        ...getResolvedState(card, lookupIds).state,
+        ...getResolvedState(card).state,
         color: colorSelect.value,
-        title: getTitle(card),
+        title: identity.title,
         updatedAt: Date.now()
       };
-      syncCacheForIds(ids, nextState, card);
-      applyState(card, cache[primaryId]);
+
+      stateCache[identity.listingId] = normalizeState(nextState, identity.title);
+      applyState(card, stateCache[identity.listingId]);
       filterCards();
       updateToolbarSyncStatus();
-      await flushScheduledPersist(ids);
+      await flushScheduledPersist(identity.listingId, identity.title);
     });
 
     commentArea.addEventListener('input', () => {
-      const { lookupIds } = getCardStorageIds(card);
+      const identity = getCardIdentity(card);
       const nextState = {
-        ...getResolvedState(card, lookupIds).state,
+        ...getResolvedState(card).state,
         comment: commentArea.value,
-        title: getTitle(card),
+        title: identity.title,
         updatedAt: Date.now()
       };
-      syncCacheForIds(ids, nextState, card);
-      schedulePersist(ids);
+
+      stateCache[identity.listingId] = normalizeState(nextState, identity.title);
+      schedulePersist(identity.listingId);
       updateToolbarSyncStatus();
     });
 
     commentArea.addEventListener('blur', async () => {
-      await flushScheduledPersist(ids);
+      const identity = getCardIdentity(card);
+      await flushScheduledPersist(identity.listingId, identity.title);
+    });
+
+    linkList.addEventListener('change', event => {
+      const checkbox = event.target.closest('.hc-link-candidate-checkbox');
+      if (!checkbox || checkbox.disabled) return;
+
+      const identity = getCardIdentity(card);
+      const selectedIds = getLinkSelection(identity.listingId);
+
+      if (checkbox.checked) {
+        selectedIds.add(checkbox.value);
+      } else {
+        selectedIds.delete(checkbox.value);
+      }
+
+      setLinkSelection(identity.listingId, [...selectedIds]);
+    });
+
+    updateButton.addEventListener('click', async () => {
+      await applyLinkSelection(card);
+    });
+
+    unlinkButton.addEventListener('click', async () => {
+      await unlinkCurrentListing(card);
     });
 
     return panel;
@@ -1252,16 +1810,20 @@
     if (card.dataset.hcEnhanced === '1') return;
     card.dataset.hcEnhanced = '1';
 
-    const { writeIds, lookupIds } = setCardStorageIds(card);
-    const state = getResolvedState(card, lookupIds).state;
-    const panel = createPanel(card, writeIds, state);
+    const identity = setCardIdentity(card);
+    upsertListingRecord(identity.listingId, identity.record);
+
+    const state = normalizeState(getResolvedState(card).state, identity.title);
+    const panel = createPanel(card, identity.listingId, state);
 
     currentSite.mountPanel(card, panel);
     refreshCard(card);
   }
 
   function handleStorageChange(changes, areaName) {
-    if (areaName === 'local' && changes[LOCAL_FILTER_STORAGE_KEY]) {
+    if (areaName !== 'local') return;
+
+    if (changes[LOCAL_FILTER_STORAGE_KEY]) {
       activeFilterValues = normalizeStoredFilterValues(changes[LOCAL_FILTER_STORAGE_KEY].newValue);
 
       document.querySelectorAll('.hc-filter-checkbox').forEach(checkbox => {
@@ -1272,22 +1834,22 @@
       return;
     }
 
-    if (areaName !== 'sync') return;
-
     let shouldRefresh = false;
 
-    Object.entries(changes).forEach(([key, change]) => {
-      if (!isManagedStorageKey(key)) return;
-
-      const id = getIdFromStorageKey(key);
-      if (change.newValue) {
-        cache[id] = normalizeState(change.newValue);
-      } else {
-        clearScheduledPersist(id);
-        delete cache[id];
-      }
+    if (changes[STATE_STORAGE_KEY]) {
+      stateCache = normalizeStateMap(changes[STATE_STORAGE_KEY].newValue);
       shouldRefresh = true;
-    });
+    }
+
+    if (changes[LISTING_REGISTRY_STORAGE_KEY]) {
+      listingRegistry = normalizeListingRegistry(changes[LISTING_REGISTRY_STORAGE_KEY].newValue);
+      shouldRefresh = true;
+    }
+
+    if (changes[LINK_GROUP_STORAGE_KEY]) {
+      linkGroupCache = normalizeLinkGroupMap(changes[LINK_GROUP_STORAGE_KEY].newValue);
+      shouldRefresh = true;
+    }
 
     if (shouldRefresh) {
       refreshAllCards();

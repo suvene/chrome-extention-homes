@@ -1,6 +1,12 @@
 # TODO
 
 ## 今回の作業
+- [x] 保存の正本を `chrome.storage.local` へ切り替え、状態・掲載台帳・link group を分けて保持する。意図: 重複候補の判定と再紐づけに必要な掲載データをローカルで継続保持するため。
+- [x] `物件名 + 住所 + 家賃` の fingerprint と manual link group で、HOME'S / SUUMO 横断のメモ共有を解決する。意図: 自動候補と明示的な解除・再リンクを両立するため。
+- [x] panel に `紐づき N件` と `紐づけ一覧` を追加し、解除ボタンと checkbox ベースの再紐づけ UI を載せる。意図: 重複件数と候補一覧を視覚的に把握し、その場でリンク管理できるようにするため。
+- [x] JSON schema を `schemaVersion: 2` へ更新し、状態だけでなく掲載台帳と link 情報も書き出し・復元できるようにする。意図: ローカルで育つリンク構造をバックアップで失わないようにするため。
+- [x] 旧 sync/local の状態を初回だけ local 正本へ移行する。意図: 既存メモを捨てずに local-only 実装へ切り替えるため。
+- [x] link 管理用の smoke と sample fixture 確認を追加する。意図: fingerprint 抽出や JSON v2 の主要フックを依存なしで再確認できるようにするため。
 - [x] 拡張名とツールバー名を `賃貸物件 条件一覧アシスタント` に変更する。意図: HOME'S 専用ではなく、SUUMO を含む賃貸一覧アシスタントとして表示名を実態に合わせるため。
 - [x] `content.js` をサイト別設定で分岐する構造へ整理し、HOME'S `condition-list` / `condition1` / SUUMO `FR301FC001` を同じ保存・フィルタ基盤で扱えるようにする。意図: 今回の SUUMO 追加を最小差分で入れつつ、今後の対象追加も進めやすくするため。
 - [x] SUUMO 一覧の room ごとにコメント UI と保存 ID を付与し、建物内の全 room が filter 対象外のときだけ建物 `<li>` を非表示にする。意図: HOME'S `condition1` と同じ建物粒度の絞り込み体験を SUUMO でも揃えるため。
@@ -32,6 +38,8 @@
 - [x] `condition-list` 追加分にも既存の `scan()` と filter 処理が効くことを確認する。意図: 連結後もメモ UI と絞り込みが同じ動きになるようにするため。
 
 ## レビュー
+- [x] local-only / link 管理追加後の `node ./tests/smoke.js` を実行する
+- [ ] 手動で HOME'S / SUUMO 実ページの紐づき件数、解除、再リンクを確認する
 - [x] SUUMO 対応追加後の `node ./tests/smoke.js` を実行する
 - [ ] 手動で HOME'S / SUUMO 実ページの表示と filter を確認する
 - [x] 構文確認を実行する

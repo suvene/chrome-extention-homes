@@ -20,5 +20,7 @@ powershell -ExecutionPolicy Bypass -File .\tests\smoke.ps1
 
 - `content.js` の構文確認
 - レガシー `hidden` 参照が残っていないこと
-- JSON 書き出し / 読み込みの主要フックが残っていること
-- ヘッダの同期状態表示フックが残っていること
+- local-only の状態保存、掲載台帳、link group の主要フックが残っていること
+- JSON 書き出し / 読み込みの主要フックが `schemaVersion: 2` と link 情報に対応していること
+- HOME'S / SUUMO の sample fixture が linking 用 selector を維持していること
+- ヘッダの保存状態表示フックが残っていること

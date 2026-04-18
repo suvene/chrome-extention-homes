@@ -7,41 +7,36 @@ const contentPath = path.join(repoRoot, 'content.js');
 const cssPath = path.join(repoRoot, 'content.css');
 const docsPath = path.join(repoRoot, 'docs');
 const manifestPath = path.join(repoRoot, 'manifest.json');
+const homesCondition1SamplePath = path.join(repoRoot, "samples/home's/condition1-building.html");
+const homesConditionListSamplePath = path.join(repoRoot, "samples/home's/condition-list-bundle.html");
+const suumoSamplePath = path.join(repoRoot, 'samples/suumo/FR301FC001-list-bundle.html');
 
 const requiredPatterns = [
   "const APP_TITLE = '賃貸物件 条件一覧アシスタント'",
+  "const STATE_STORAGE_KEY = 'homes_state_v1'",
+  "const LISTING_REGISTRY_STORAGE_KEY = 'homes_listing_registry_v1'",
+  "const LINK_GROUP_STORAGE_KEY = 'homes_link_group_v1'",
+  "const LOCAL_MIGRATION_FLAG_KEY = 'homes_local_migration_v1'",
   "const EXPORT_FILENAME_PREFIX = 'rent-condition-notes'",
   "id: 'homes-condition1'",
   "id: 'homes-condition-list'",
   "id: 'suumo-fr301fc001'",
-  "value: '1', label: '1. 要確認'",
-  "value: '2', label: '2. 検討中'",
-  "value: '3', label: '3. 本命'",
-  "value: '8', label: '8. 除外候補'",
-  'function getHomesLookupStorageIds',
-  'function getHomesWriteStorageIds',
-  'function getSuumoLookupStorageIds',
-  'function getSuumoWriteStorageIds',
-  'function getHomesCondition1BuildingContainer',
-  'function getHomesConditionListBundle',
-  'function getSuumoBundle',
-  'function getHomesNextPageUrl',
-  'function getSuumoNextPageUrl',
-  'function createSuumoPageSeparator',
-  'function mountSuumoPanel',
-  'function syncBuildingVisibility',
-  'async function loadNextPages',
+  'function buildListingFingerprint',
+  'function normalizeAddressText',
+  'function normalizeRentText',
+  'function normalizeListingRegistry',
+  'function normalizeLinkGroupMap',
+  'function getCandidateListingIds',
+  'async function unlinkCurrentListing',
+  'async function applyLinkSelection',
+  'const resolvedState = getResolvedState(card).state;',
   'function buildExportPayload',
-  'function formatExportTimestamp',
-  'function getExportFilename',
   'function parseImportPayload',
-  'async function exportJson',
-  'async function importJson',
-  'const LOCAL_FILTER_STORAGE_KEY = \'homes_header_filter_v1\'',
-  'async function loadStoredFilterValues',
-  'async function persistFilterValues',
-  'function getLastUpdatedAt',
-  'function updateToolbarSyncStatus',
+  'schemaVersion: 2',
+  'listings: getExportableListings()',
+  'linkGroups: getExportableLinkGroups()',
+  'ローカルに保存済み',
+  '紐づけ一覧',
   'data-hc-last-updated',
   'data-hc-sync-state',
   'id="hc-export"',
@@ -52,6 +47,10 @@ function listTopLevelDocFiles(directoryPath) {
   return fs.readdirSync(directoryPath, { withFileTypes: true })
     .filter(entry => entry.isFile())
     .map(entry => path.join(directoryPath, entry.name));
+}
+
+function compactHtml(content) {
+  return content.replace(/\s+/g, ' ');
 }
 
 function checkJavaScriptSyntax() {
@@ -80,7 +79,7 @@ function checkLegacyHiddenReferences() {
 }
 
 function checkRequiredPatterns() {
-  console.log('Checking that required toolbar, site, and storage hooks still exist...');
+  console.log('Checking that required toolbar, local storage, and linking hooks still exist...');
 
   const content = fs.readFileSync(contentPath, 'utf8');
   const css = fs.readFileSync(cssPath, 'utf8');
@@ -90,16 +89,20 @@ function checkRequiredPatterns() {
     throw new Error(`Required pattern missing from content.js:\n${missingPatterns.join('\n')}`);
   }
 
-  if (!css.includes('.kksearch.rentListPrDesign')) {
-    throw new Error('Required PR hidden selector is missing from content.css');
+  if (content.includes('chrome.storage.sync.set(') || content.includes('chrome.storage.sync.remove(')) {
+    throw new Error('content.js must not write to chrome.storage.sync anymore.');
+  }
+
+  if (!css.includes('.hc-link-toolbar')) {
+    throw new Error('Required link toolbar selector is missing from content.css');
+  }
+
+  if (!css.includes('.hc-link-item')) {
+    throw new Error('Required link item selector is missing from content.css');
   }
 
   if (!css.includes('table.cassetteitem_other > tbody.hc-filtered-out')) {
     throw new Error('Required SUUMO filtered selector is missing from content.css');
-  }
-
-  if (!css.includes('.hc-page-separator-item')) {
-    throw new Error('Required SUUMO page separator selector is missing from content.css');
   }
 }
 
@@ -153,12 +156,67 @@ function checkManifestSupport() {
   }
 }
 
+function checkSampleFixtures() {
+  console.log('Checking sample fixtures for linking selectors...');
+
+  const homesCondition1 = compactHtml(fs.readFileSync(homesCondition1SamplePath, 'utf8'));
+  const homesConditionList = compactHtml(fs.readFileSync(homesConditionListSamplePath, 'utf8'));
+  const suumo = compactHtml(fs.readFileSync(suumoSamplePath, 'utf8'));
+
+  if (!homesCondition1.includes('class="bukkenName prg-detailLinkTrigger">アサノ荘</span>')) {
+    throw new Error('HOME\'S condition1 sample is missing the property name selector used for linking.');
+  }
+
+  if (!homesCondition1.includes('<th>所在地</th><td>東京都品川区南大井6丁目12-4</td>')) {
+    throw new Error('HOME\'S condition1 sample is missing the address selector used for linking.');
+  }
+
+  if (!homesCondition1.includes('class="priceLabel"><span class="num">5</span>万円</span>')) {
+    throw new Error('HOME\'S condition1 sample is missing the rent selector used for linking.');
+  }
+
+  if (!homesConditionList.includes('class="tableContent">東京都品川区南大井3丁目9-7</td>')) {
+    throw new Error('HOME\'S condition-list sample is missing the address selector used for linking.');
+  }
+
+  if (!homesConditionList.includes('<td class="price"><span>7</span>万円</td>')) {
+    throw new Error('HOME\'S condition-list sample is missing the rent selector used for linking.');
+  }
+
+  if (!suumo.includes('class="cassetteitem_content-title">グレイス大森海岸</div>')) {
+    throw new Error('SUUMO sample is missing the property name selector used for linking.');
+  }
+
+  if (!suumo.includes('class="cassetteitem_detail-col1">東京都品川区南大井３</li>')) {
+    throw new Error('SUUMO sample is missing the address selector used for linking.');
+  }
+
+  if (!suumo.includes('class="cassetteitem_price cassetteitem_price--rent"><span class="cassetteitem_other-emphasis ui-text--bold">5.5万円</span>')) {
+    throw new Error('SUUMO sample is missing the rent selector used for linking.');
+  }
+}
+
+function checkStorageDocVersion() {
+  console.log('Checking storage documentation version...');
+
+  const latestDocPath = path.join(docsPath, 'storage_sync_v1.4.md');
+  if (!fs.existsSync(latestDocPath)) {
+    throw new Error('Latest storage sync doc must be versioned as docs/storage_sync_v1.4.md.');
+  }
+
+  if (fs.existsSync(path.join(docsPath, 'storage_sync_v1.3.md'))) {
+    throw new Error('Older latest storage sync doc should have been removed after version bump.');
+  }
+}
+
 function main() {
   checkJavaScriptSyntax();
   checkLegacyHiddenReferences();
   checkRequiredPatterns();
   checkExportFilenameConvention();
   checkManifestSupport();
+  checkSampleFixtures();
+  checkStorageDocVersion();
   console.log('Smoke checks passed.');
 }
 
