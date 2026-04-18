@@ -1095,31 +1095,17 @@
     return `${year}/${month}/${day} ${hours}:${minutes}:${seconds}`;
   }
 
-  function getToolbarSyncStatus() {
-    if (commentSaveTimers.size > 0) {
-      return '保存待ちの変更があります';
-    }
-
-    return 'ローカルに保存済み';
-  }
-
-  function updateToolbarSyncStatus() {
+  function updateToolbarSummary() {
     const toolbar = document.querySelector('.hc-toolbar');
     if (!toolbar) return;
 
     const updatedAtValue = toolbar.querySelector('[data-hc-last-updated]');
-    const syncStateValue = toolbar.querySelector('[data-hc-sync-state]');
-    if (!updatedAtValue || !syncStateValue) return;
+    if (!updatedAtValue) return;
 
     const nextUpdatedAt = formatUpdatedAt(getLastUpdatedAt());
-    const nextSyncState = getToolbarSyncStatus();
 
     if (updatedAtValue.textContent !== nextUpdatedAt) {
       updatedAtValue.textContent = nextUpdatedAt;
-    }
-
-    if (syncStateValue.textContent !== nextSyncState) {
-      syncStateValue.textContent = nextSyncState;
     }
   }
 
@@ -1374,10 +1360,6 @@
             <span class="hc-sync-label">最終更新日時</span>
             <strong class="hc-sync-value" data-hc-last-updated>未更新</strong>
           </span>
-          <span class="hc-sync-item">
-            <span class="hc-sync-label">保存状態</span>
-            <strong class="hc-sync-value" data-hc-sync-state>確認中</strong>
-          </span>
         </div>
         <button type="button" id="hc-export">JSON書き出し</button>
         <button type="button" id="hc-import">JSON読み込み</button>
@@ -1431,7 +1413,7 @@
       }
     });
 
-    updateToolbarSyncStatus();
+    updateToolbarSummary();
   }
 
   function filterCards() {
@@ -1617,7 +1599,7 @@
   function refreshAllCards() {
     document.querySelectorAll(currentSite.itemSelector).forEach(refreshCard);
     filterCards();
-    updateToolbarSyncStatus();
+    updateToolbarSummary();
   }
 
   function createManualGroupId() {
@@ -1733,7 +1715,7 @@
       stateCache[identity.listingId] = normalizeState(nextState, identity.title);
       applyState(card, stateCache[identity.listingId]);
       filterCards();
-      updateToolbarSyncStatus();
+      updateToolbarSummary();
       await flushScheduledPersist(identity.listingId, identity.title);
     });
 
@@ -1748,7 +1730,7 @@
 
       stateCache[identity.listingId] = normalizeState(nextState, identity.title);
       schedulePersist(identity.listingId);
-      updateToolbarSyncStatus();
+      updateToolbarSummary();
     });
 
     commentArea.addEventListener('blur', async () => {
@@ -1886,7 +1868,7 @@
     createToolbar();
     document.querySelectorAll(currentSite.itemSelector).forEach(enhanceCard);
     filterCards();
-    updateToolbarSyncStatus();
+    updateToolbarSummary();
   }
 
   async function init() {

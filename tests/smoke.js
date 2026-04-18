@@ -37,11 +37,9 @@ const requiredPatterns = [
   'schemaVersion: 2',
   'listings: getExportableListings()',
   'linkGroups: getExportableLinkGroups()',
-  'ローカルに保存済み',
   '紐づけ一覧',
   'class="hc-link-name"',
   'data-hc-last-updated',
-  'data-hc-sync-state',
   'id="hc-export"',
   'id="hc-import"'
 ];
