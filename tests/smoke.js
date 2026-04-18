@@ -101,8 +101,16 @@ function checkExportFilenameConvention() {
     throw new Error('JSON export timestamp format is not YYMMDD-HHMMSS.');
   }
 
-  if (!content.includes('return `${EXPORT_FILENAME_PREFIX}-${formatExportTimestamp(date)}.json`;')) {
+  if (!content.includes('return `${EXPORT_FILENAME_PREFIX}-${formatExportTimestamp(new Date(timestamp))}.json`;')) {
     throw new Error('JSON export filename must include the timestamp suffix.');
+  }
+
+  if (!content.includes('const lastUpdatedAt = getLastUpdatedAt();')) {
+    throw new Error('JSON export filename must be based on the last updated time.');
+  }
+
+  if (!content.includes('const filenameTimestamp = lastUpdatedAt > 0 ? lastUpdatedAt : Date.now();')) {
+    throw new Error('JSON export filename fallback must be explicit when no updated state exists.');
   }
 }
 

@@ -482,8 +482,8 @@
     return `${year}${month}${day}-${hours}${minutes}${seconds}`;
   }
 
-  function getExportFilename(date = new Date()) {
-    return `${EXPORT_FILENAME_PREFIX}-${formatExportTimestamp(date)}.json`;
+  function getExportFilename(timestamp = Date.now()) {
+    return `${EXPORT_FILENAME_PREFIX}-${formatExportTimestamp(new Date(timestamp))}.json`;
   }
 
   function parseImportPayload(parsedJson) {
@@ -522,7 +522,9 @@
 
   async function exportJson() {
     await flushAllScheduledPersists();
-    downloadJson(getExportFilename(), buildExportPayload());
+    const lastUpdatedAt = getLastUpdatedAt();
+    const filenameTimestamp = lastUpdatedAt > 0 ? lastUpdatedAt : Date.now();
+    downloadJson(getExportFilename(filenameTimestamp), buildExportPayload());
   }
 
   async function importJson(file) {
