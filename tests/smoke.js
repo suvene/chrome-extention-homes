@@ -6,24 +6,31 @@ const repoRoot = path.resolve(__dirname, '..');
 const contentPath = path.join(repoRoot, 'content.js');
 const cssPath = path.join(repoRoot, 'content.css');
 const docsPath = path.join(repoRoot, 'docs');
+const manifestPath = path.join(repoRoot, 'manifest.json');
 
 const requiredPatterns = [
-  "const CONDITION1_ROOM_SELECTOR = 'tr.prg-roomInfo[data-kykey]'",
+  "const APP_TITLE = '賃貸物件 条件一覧アシスタント'",
+  "const EXPORT_FILENAME_PREFIX = 'rent-condition-notes'",
+  "id: 'homes-condition1'",
+  "id: 'homes-condition-list'",
+  "id: 'suumo-fr301fc001'",
   "value: '1', label: '1. 要確認'",
   "value: '2', label: '2. 検討中'",
   "value: '3', label: '3. 本命'",
   "value: '8', label: '8. 除外候補'",
-  'function getRoomId',
-  'function getTyKey',
-  'function getPanelMountPoint',
-  'function getCondition1BuildingContainer',
-  'function getCondition1NextPageUrl',
-  'function appendCondition1BuildingBlocks',
-  'async function loadCondition1NextPages',
-  'function getConditionListBundle',
-  'function appendConditionListBuildingBlocks',
-  'async function loadConditionListNextPages',
-  'function syncCondition1BuildingVisibility',
+  'function getHomesLookupStorageIds',
+  'function getHomesWriteStorageIds',
+  'function getSuumoLookupStorageIds',
+  'function getSuumoWriteStorageIds',
+  'function getHomesCondition1BuildingContainer',
+  'function getHomesConditionListBundle',
+  'function getSuumoBundle',
+  'function getHomesNextPageUrl',
+  'function getSuumoNextPageUrl',
+  'function createSuumoPageSeparator',
+  'function mountSuumoPanel',
+  'function syncBuildingVisibility',
+  'async function loadNextPages',
   'function buildExportPayload',
   'function formatExportTimestamp',
   'function getExportFilename',
@@ -73,7 +80,7 @@ function checkLegacyHiddenReferences() {
 }
 
 function checkRequiredPatterns() {
-  console.log('Checking that required toolbar and storage hooks still exist...');
+  console.log('Checking that required toolbar, site, and storage hooks still exist...');
 
   const content = fs.readFileSync(contentPath, 'utf8');
   const css = fs.readFileSync(cssPath, 'utf8');
@@ -86,6 +93,14 @@ function checkRequiredPatterns() {
   if (!css.includes('.kksearch.rentListPrDesign')) {
     throw new Error('Required PR hidden selector is missing from content.css');
   }
+
+  if (!css.includes('table.cassetteitem_other > tbody.hc-filtered-out')) {
+    throw new Error('Required SUUMO filtered selector is missing from content.css');
+  }
+
+  if (!css.includes('.hc-page-separator-item')) {
+    throw new Error('Required SUUMO page separator selector is missing from content.css');
+  }
 }
 
 function checkExportFilenameConvention() {
@@ -93,7 +108,7 @@ function checkExportFilenameConvention() {
 
   const content = fs.readFileSync(contentPath, 'utf8');
 
-  if (!content.includes("const EXPORT_FILENAME_PREFIX = 'homes-condition-notes'")) {
+  if (!content.includes("const EXPORT_FILENAME_PREFIX = 'rent-condition-notes'")) {
     throw new Error('JSON export filename prefix is missing or changed unexpectedly.');
   }
 
@@ -114,11 +129,36 @@ function checkExportFilenameConvention() {
   }
 }
 
+function checkManifestSupport() {
+  console.log('Checking manifest matches and metadata...');
+
+  const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+  const expectedMatch = 'https://suumo.jp/jj/chintai/ichiran/FR301FC001/*';
+
+  if (manifest.name !== '賃貸物件 条件一覧アシスタント') {
+    throw new Error('Manifest name was not updated to the generic assistant name.');
+  }
+
+  if (!manifest.description.includes('HOME\'S / SUUMO')) {
+    throw new Error('Manifest description does not mention HOME\'S / SUUMO support.');
+  }
+
+  if (!manifest.host_permissions.includes(expectedMatch)) {
+    throw new Error('Manifest host permissions do not include the SUUMO list URL.');
+  }
+
+  const matches = manifest.content_scripts.flatMap(script => script.matches || []);
+  if (!matches.includes(expectedMatch)) {
+    throw new Error('Content script matches do not include the SUUMO list URL.');
+  }
+}
+
 function main() {
   checkJavaScriptSyntax();
   checkLegacyHiddenReferences();
   checkRequiredPatterns();
   checkExportFilenameConvention();
+  checkManifestSupport();
   console.log('Smoke checks passed.');
 }
 

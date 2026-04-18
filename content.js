@@ -2,13 +2,9 @@
   const LEGACY_STORAGE_KEY = 'homes_condition_notes_v1';
   const SYNC_KEY_PREFIX = 'homes_condition_note_v2:';
   const LOCAL_FILTER_STORAGE_KEY = 'homes_header_filter_v1';
-  const ITEM_SELECTOR = 'div.mod-newArrivalBuilding, tr.prg-roomInfo[data-kykey]';
-  const CONDITION1_ROOM_SELECTOR = 'tr.prg-roomInfo[data-kykey]';
-  const CONDITION1_BUNDLE_SELECTOR = '.prg-bundle';
-  const CONDITION_LIST_BUNDLE_SELECTOR = '.bundle';
-  const CONDITION1_PAGINATION_NEXT_SELECTOR = '.mod-listPaging li.nextPage a[href]';
   const COMMENT_SAVE_DEBOUNCE_MS = 700;
-  const EXPORT_FILENAME_PREFIX = 'homes-condition-notes';
+  const EXPORT_FILENAME_PREFIX = 'rent-condition-notes';
+  const APP_TITLE = '賃貸物件 条件一覧アシスタント';
   const STATUS_OPTIONS = [
     { value: '0', label: '0. 未検討', badgeLabel: '0. 未検討', colorClass: '', defaultChecked: true },
     { value: '1', label: '1. 要確認', badgeLabel: '1. 要確認', colorClass: 'orange', defaultChecked: true },
@@ -30,11 +26,77 @@
   const DEFAULT_FILTER_VALUES = new Set(
     STATUS_OPTIONS.filter(option => option.defaultChecked).map(option => option.value)
   );
+  const SITE_CONFIGS = [
+    {
+      id: 'homes-condition1',
+      itemSelector: 'tr.prg-roomInfo[data-kykey]',
+      matches: location =>
+        location.hostname === 'www.homes.co.jp'
+        && location.pathname.startsWith('/search/condition1/'),
+      getLookupStorageIds: getHomesLookupStorageIds,
+      getWriteStorageIds: getHomesWriteStorageIds,
+      getTitle: getHomesTitle,
+      getDecoratedElements: getHomesCondition1Rows,
+      getPanel: getHomesCondition1Panel,
+      mountPanel: mountHomesCondition1Panel,
+      getBuildingContainer: getHomesCondition1BuildingContainer,
+      getContainerCards: getHomesCondition1ContainerCards,
+      getBundle: getHomesCondition1Bundle,
+      getBuildingBlocks: getHomesCondition1BuildingBlocks,
+      getBundleInsertAnchor: getHomesCondition1BundleInsertAnchor,
+      getNextPageUrl: getHomesNextPageUrl,
+      getPageLabel: getHomesPageLabel,
+      createPageSeparator: createDefaultPageSeparator
+    },
+    {
+      id: 'homes-condition-list',
+      itemSelector: 'div.mod-newArrivalBuilding',
+      matches: location =>
+        location.hostname === 'www.homes.co.jp'
+        && location.pathname.startsWith('/search/condition-list/'),
+      getLookupStorageIds: getHomesLookupStorageIds,
+      getWriteStorageIds: getHomesWriteStorageIds,
+      getTitle: getHomesTitle,
+      getDecoratedElements: card => [card],
+      getPanel: getDefaultPanel,
+      mountPanel: mountHomesDefaultPanel,
+      getBundle: getHomesConditionListBundle,
+      getBuildingBlocks: getHomesConditionListBuildingBlocks,
+      getBundleInsertAnchor: getHomesConditionListBundleInsertAnchor,
+      getNextPageUrl: getHomesNextPageUrl,
+      getPageLabel: getHomesPageLabel,
+      createPageSeparator: createDefaultPageSeparator
+    },
+    {
+      id: 'suumo-fr301fc001',
+      itemSelector: 'table.cassetteitem_other > tbody',
+      matches: location =>
+        location.hostname === 'suumo.jp'
+        && location.pathname.startsWith('/jj/chintai/ichiran/FR301FC001/'),
+      getLookupStorageIds: getSuumoLookupStorageIds,
+      getWriteStorageIds: getSuumoWriteStorageIds,
+      getTitle: getSuumoTitle,
+      getDecoratedElements: card => [card],
+      getPanel: getDefaultPanel,
+      mountPanel: mountSuumoPanel,
+      getBuildingContainer: getSuumoBuildingContainer,
+      getContainerCards: getSuumoContainerCards,
+      getBundle: getSuumoBundle,
+      getBuildingBlocks: getSuumoBuildingBlocks,
+      getNextPageUrl: getSuumoNextPageUrl,
+      getPageLabel: getSuumoPageLabel,
+      createPageSeparator: createSuumoPageSeparator
+    }
+  ];
+  const currentSite = detectCurrentSite();
   let cache = {};
   let activeFilterValues = new Set(DEFAULT_FILTER_VALUES);
   const commentSaveTimers = new Map();
-  let isCondition1NextPageLoading = false;
-  let isConditionListNextPageLoading = false;
+  let isNextPageLoading = false;
+
+  if (!currentSite) {
+    return;
+  }
 
   async function loadAll() {
     const [migratedCache, storedFilterValues] = await Promise.all([
@@ -44,6 +106,10 @@
 
     cache = migratedCache;
     activeFilterValues = storedFilterValues;
+  }
+
+  function detectCurrentSite() {
+    return SITE_CONFIGS.find(site => site.matches(window.location)) || null;
   }
 
   function getStorageKey(id) {
@@ -66,25 +132,15 @@
     values.push(normalized);
   }
 
-  function isCondition1Room(card) {
-    return card.matches(CONDITION1_ROOM_SELECTOR);
-  }
-
-  function isCondition1Page() {
-    return window.location.pathname.startsWith('/search/condition1/');
-  }
-
-  function isConditionListPage() {
-    return window.location.pathname.startsWith('/search/condition-list/');
-  }
-
-  function getCondition1Rows(card) {
-    if (!isCondition1Room(card)) return [card];
+  function getHomesCondition1Rows(card) {
+    if (!card.matches('tr.prg-roomInfo[data-kykey]')) {
+      return [card];
+    }
 
     const rows = [card];
     let next = card.nextElementSibling;
 
-    while (next && next.matches('tr') && !next.matches(CONDITION1_ROOM_SELECTOR)) {
+    while (next && next.matches('tr') && !next.matches('tr.prg-roomInfo[data-kykey]')) {
       rows.push(next);
       next = next.nextElementSibling;
     }
@@ -92,24 +148,35 @@
     return rows;
   }
 
-  function parseRoomIdFromHref(href) {
+  function parseHomesRoomIdFromHref(href) {
     if (typeof href !== 'string') return '';
 
     const match = href.match(/\/chintai\/room\/([^/?#]+)\//);
     return match?.[1] || '';
   }
 
-  function getRoomId(card) {
+  function parseSuumoBcFromHref(href) {
+    if (typeof href !== 'string' || !href.trim()) return '';
+
+    try {
+      return new URL(href, window.location.href).searchParams.get('bc') || '';
+    } catch (error) {
+      console.warn('Failed to parse SUUMO room id from href', error);
+      return '';
+    }
+  }
+
+  function getHomesRoomId(card) {
     const directKykey = card.dataset?.kykey;
     if (directKykey) return directKykey;
 
     const nestedKykey = card.querySelector('[data-kykey]')?.dataset?.kykey;
     if (nestedKykey) return nestedKykey;
 
-    const directHrefId = parseRoomIdFromHref(card.dataset?.href);
+    const directHrefId = parseHomesRoomIdFromHref(card.dataset?.href);
     if (directHrefId) return directHrefId;
 
-    const nestedHrefId = parseRoomIdFromHref(card.querySelector('[data-href]')?.dataset?.href);
+    const nestedHrefId = parseHomesRoomIdFromHref(card.querySelector('[data-href]')?.dataset?.href);
     if (nestedHrefId) return nestedHrefId;
 
     const detailLinks = [
@@ -117,14 +184,14 @@
     ];
 
     for (const link of detailLinks) {
-      const roomId = parseRoomIdFromHref(link.href);
+      const roomId = parseHomesRoomIdFromHref(link.href);
       if (roomId) return roomId;
     }
 
     return '';
   }
 
-  function getTyKey(card) {
+  function getHomesTyKey(card) {
     const directTykey = card.dataset?.tykey;
     if (directTykey) return directTykey;
 
@@ -134,7 +201,7 @@
     return card.querySelector('[data-tykey]')?.dataset?.tykey || '';
   }
 
-  function getLegacyStorageIds(card) {
+  function getHomesLegacyStorageIds(card) {
     const ids = [];
     const bidLink = card.querySelector('a[data-bid]');
     const row = card.querySelector('tr[data-href]');
@@ -148,33 +215,103 @@
     return ids;
   }
 
-  function getLookupStorageIds(card) {
+  function getHomesTitle(card) {
+    const title =
+      card?.querySelector('.bukkenName')?.textContent?.trim()
+      || card?.closest('.prg-unitListBody')?.querySelector('img[alt]')?.alt?.trim();
+
+    if (title) return title;
+
+    const floor = card?.querySelector('.roomKaisuu')?.textContent?.trim();
+    const roomNumber = card?.querySelector('.roomNumber')?.textContent?.trim();
+    const roomLabel = [floor, roomNumber].filter(Boolean).join(' ');
+
+    return roomLabel || '物件名不明';
+  }
+
+  function getHomesLookupStorageIds(card) {
     const ids = [];
-    const roomId = getRoomId(card);
-    const tykey = getTyKey(card);
+    const roomId = getHomesRoomId(card);
+    const tykey = getHomesTyKey(card);
 
     pushUnique(ids, roomId ? `room:${roomId}` : '');
     pushUnique(ids, tykey ? `tykey:${tykey}` : '');
-    getLegacyStorageIds(card).forEach(id => pushUnique(ids, id));
-    pushUnique(ids, `title:${getTitle(card)}`);
+    getHomesLegacyStorageIds(card).forEach(id => pushUnique(ids, id));
+    pushUnique(ids, `title:${getHomesTitle(card)}`);
 
     return ids;
   }
 
-  function getWriteStorageIds(card) {
-    const lookupIds = getLookupStorageIds(card);
+  function getHomesWriteStorageIds(card) {
+    const lookupIds = getHomesLookupStorageIds(card);
     const roomId = lookupIds.find(id => id.startsWith('room:'));
     if (roomId) return [roomId];
 
     const tykey = lookupIds.find(id => id.startsWith('tykey:'));
     if (tykey) return [tykey];
 
-    return [lookupIds[0]];
+    return [lookupIds[0]].filter(Boolean);
+  }
+
+  function getSuumoClipKey(card) {
+    return card.querySelector('.js-clipkey')?.value?.trim() || '';
+  }
+
+  function getSuumoDetailLink(card) {
+    return card.querySelector('.js-cassette_link_href[href]') || null;
+  }
+
+  function getSuumoRoomStorageId(card) {
+    const clipKey = getSuumoClipKey(card);
+    if (clipKey) return `suumo-room:${clipKey}`;
+
+    const bc = parseSuumoBcFromHref(getSuumoDetailLink(card)?.getAttribute('href'));
+    return bc ? `suumo-room:${bc}` : '';
+  }
+
+  function getSuumoTitle(card) {
+    const buildingTitle = card?.closest('li')?.querySelector('.cassetteitem_content-title')?.textContent?.trim();
+    const firstRow = card?.querySelector('tr.js-cassette_link');
+    const floor = firstRow?.children?.[2]?.textContent?.trim() || '';
+    const layout = card?.querySelector('.cassetteitem_madori')?.textContent?.trim() || '';
+    const title = [buildingTitle, floor, layout].filter(Boolean).join(' ');
+
+    return title || buildingTitle || '物件名不明';
+  }
+
+  function getSuumoLookupStorageIds(card) {
+    const ids = [];
+    const canonicalId = getSuumoRoomStorageId(card);
+    const detailLink = getSuumoDetailLink(card);
+    const bc = parseSuumoBcFromHref(detailLink?.getAttribute('href'));
+    const detailHref = detailLink?.href || '';
+
+    pushUnique(ids, canonicalId);
+    pushUnique(ids, bc ? `suumo-bc:${bc}` : '');
+    pushUnique(ids, detailHref ? `suumo-href:${detailHref}` : '');
+    pushUnique(ids, `suumo-title:${getSuumoTitle(card)}`);
+
+    return ids;
+  }
+
+  function getSuumoWriteStorageIds(card) {
+    const canonicalId = getSuumoRoomStorageId(card);
+    if (canonicalId) return [canonicalId];
+
+    return [getSuumoLookupStorageIds(card)[0]].filter(Boolean);
+  }
+
+  function getLookupStorageIds(card) {
+    return currentSite.getLookupStorageIds(card);
+  }
+
+  function getWriteStorageIds(card) {
+    return currentSite.getWriteStorageIds(card);
   }
 
   function setCardStorageIds(card) {
     const writeIds = getWriteStorageIds(card).filter(Boolean);
-    const lookupIds = getLookupStorageIds(card);
+    const lookupIds = getLookupStorageIds(card).filter(Boolean);
 
     card.dataset.hcId = writeIds[0] || '';
     card.dataset.hcWriteIds = JSON.stringify(writeIds);
@@ -209,17 +346,7 @@
   }
 
   function getTitle(card) {
-    const title =
-      card?.querySelector('.bukkenName')?.textContent?.trim()
-      || card?.closest('.prg-unitListBody')?.querySelector('img[alt]')?.alt?.trim();
-
-    if (title) return title;
-
-    const floor = card?.querySelector('.roomKaisuu')?.textContent?.trim();
-    const roomNumber = card?.querySelector('.roomNumber')?.textContent?.trim();
-    const roomLabel = [floor, roomNumber].filter(Boolean).join(' ');
-
-    return roomLabel || '物件名不明';
+    return currentSite.getTitle(card);
   }
 
   function getDefaultState(card) {
@@ -635,80 +762,115 @@
     }
   }
 
-  function getPanel(card) {
+  function getDefaultPanel(card) {
+    return card.querySelector('.hc-panel') || null;
+  }
+
+  function getHomesCondition1Panel(card) {
     if (card.matches('.hc-panel')) return card;
 
     const directPanel = card.querySelector('.hc-panel');
     if (directPanel) return directPanel;
 
-    if (!isCondition1Room(card)) return null;
-
-    return getCondition1Rows(card)
+    return getHomesCondition1Rows(card)
       .map(row => row.querySelector('.hc-panel'))
       .find(Boolean) || null;
   }
 
   function getDecoratedElements(card) {
-    return isCondition1Room(card) ? getCondition1Rows(card) : [card];
+    return currentSite.getDecoratedElements(card);
   }
 
-  function getCondition1BuildingContainer(card) {
-    if (!isCondition1Room(card)) return null;
-
+  function getHomesCondition1BuildingContainer(card) {
     return (
       card.closest('.mod-mergeBuilding--rent--photo')
       || card.closest('.moduleInner.prg-building')
     );
   }
 
-  function getCondition1Bundle(root = document) {
-    return root.querySelector(CONDITION1_BUNDLE_SELECTOR);
+  function getHomesCondition1ContainerCards(container) {
+    return [...container.querySelectorAll('tr.prg-roomInfo[data-kykey]')];
   }
 
-  function getConditionListBundle(root = document) {
-    return root.querySelector(CONDITION_LIST_BUNDLE_SELECTOR);
+  function getHomesCondition1Bundle(root = document) {
+    return root.querySelector('.prg-bundle');
   }
 
-  function getCondition1BuildingBlocks(bundle) {
+  function getHomesConditionListBundle(root = document) {
+    return root.querySelector('.bundle');
+  }
+
+  function getSuumoBundle(root = document) {
+    return root.querySelector('ul.l-cassetteitem');
+  }
+
+  function getHomesCondition1BuildingBlocks(bundle) {
     if (!bundle) return [];
 
     return [...bundle.children].filter(child => child.querySelector('.moduleInner.prg-building'));
   }
 
-  function getCondition1BundleInsertAnchor(bundle) {
-    return bundle?.querySelector('.bukkenListAction.nocheck.bottom') || null;
-  }
-
-  function getConditionListBuildingBlocks(bundle) {
+  function getHomesConditionListBuildingBlocks(bundle) {
     if (!bundle) return [];
 
     return [...bundle.children].filter(child => child.matches('.mod-newArrivalBuilding'));
   }
 
-  function getConditionListBundleInsertAnchor(bundle) {
+  function getSuumoBuildingBlocks(bundle) {
+    if (!bundle) return [];
+
+    return [...bundle.children].filter(child => child.matches('li'));
+  }
+
+  function getHomesCondition1BundleInsertAnchor(bundle) {
+    return bundle?.querySelector('.bukkenListAction.nocheck.bottom') || null;
+  }
+
+  function getHomesConditionListBundleInsertAnchor(bundle) {
     return bundle?.querySelector('.bundleAction.is-positionBottom') || null;
   }
 
-  function getCondition1NextPageUrl(root = document) {
-    const nextLink = root.querySelector(CONDITION1_PAGINATION_NEXT_SELECTOR);
+  function getHomesNextPageUrl(root = document) {
+    const nextLink = root.querySelector('.mod-listPaging li.nextPage a[href]');
     const href = nextLink?.getAttribute('href');
     if (!href) return '';
 
     try {
       return new URL(href, window.location.href).href;
     } catch (error) {
-      console.warn('Failed to resolve condition1 next page URL', error);
+      console.warn('Failed to resolve HOME\'S next page URL', error);
       return '';
     }
   }
 
-  function getCondition1PageLabel(root = document) {
+  function getHomesPageLabel(root = document) {
     const selectedPage =
       root.querySelector('.mod-listPaging li.selected [aria-current="page"]')
       || root.querySelector('.mod-listPaging li.selected span')
       || root.querySelector('.mod-listPaging li.selected a');
 
     const pageNumber = selectedPage?.textContent?.trim();
+    if (!pageNumber) return '';
+
+    return `Page ${pageNumber}`;
+  }
+
+  function getSuumoNextPageUrl(root = document) {
+    const nextLink = [...root.querySelectorAll('.pagination_set-nav a[href]')]
+      .find(link => link.textContent?.trim() === '次へ');
+    const href = nextLink?.getAttribute('href');
+    if (!href) return '';
+
+    try {
+      return new URL(href, window.location.href).href;
+    } catch (error) {
+      console.warn('Failed to resolve SUUMO next page URL', error);
+      return '';
+    }
+  }
+
+  function getSuumoPageLabel(root = document) {
+    const pageNumber = root.querySelector('.pagination_set-nav .pagination-current')?.textContent?.trim();
     if (!pageNumber) return '';
 
     return `Page ${pageNumber}`;
@@ -724,26 +886,33 @@
     return new DOMParser().parseFromString(html, 'text/html');
   }
 
-  function createCondition1PageSeparator(pageLabel) {
+  function createDefaultPageSeparator(pageLabel) {
     const separator = document.createElement('div');
     separator.className = 'hc-page-separator';
     separator.textContent = pageLabel;
     return separator;
   }
 
-  function appendCondition1BuildingBlocks(buildingBlocks, pageLabel = '') {
-    const bundle = getCondition1Bundle();
+  function createSuumoPageSeparator(pageLabel) {
+    const item = document.createElement('li');
+    item.className = 'hc-page-separator-item';
+    item.appendChild(createDefaultPageSeparator(pageLabel));
+    return item;
+  }
+
+  function appendNextPageBlocks(buildingBlocks, pageLabel = '') {
+    const bundle = currentSite.getBundle();
     if (!bundle || buildingBlocks.length === 0) return 0;
 
     const fragment = document.createDocumentFragment();
     if (pageLabel) {
-      fragment.appendChild(createCondition1PageSeparator(pageLabel));
+      fragment.appendChild(currentSite.createPageSeparator(pageLabel));
     }
     buildingBlocks.forEach(block => {
       fragment.appendChild(block);
     });
 
-    const insertAnchor = getCondition1BundleInsertAnchor(bundle);
+    const insertAnchor = currentSite.getBundleInsertAnchor?.(bundle);
     if (insertAnchor) {
       bundle.insertBefore(fragment, insertAnchor);
     } else {
@@ -753,98 +922,52 @@
     return buildingBlocks.length;
   }
 
-  function appendConditionListBuildingBlocks(buildingBlocks, pageLabel = '') {
-    const bundle = getConditionListBundle();
-    if (!bundle || buildingBlocks.length === 0) return 0;
+  async function loadNextPages() {
+    if (isNextPageLoading || !currentSite.getBundle || !currentSite.getNextPageUrl) return;
+    if (!currentSite.getBundle()) return;
 
-    const fragment = document.createDocumentFragment();
-    if (pageLabel) {
-      fragment.appendChild(createCondition1PageSeparator(pageLabel));
-    }
-    buildingBlocks.forEach(block => {
-      fragment.appendChild(block);
-    });
-
-    const insertAnchor = getConditionListBundleInsertAnchor(bundle);
-    if (insertAnchor) {
-      bundle.insertBefore(fragment, insertAnchor);
-    } else {
-      bundle.appendChild(fragment);
-    }
-
-    return buildingBlocks.length;
-  }
-
-  async function loadCondition1NextPages() {
-    if (!isCondition1Page() || isCondition1NextPageLoading) return;
-    if (!getCondition1Bundle()) return;
-
-    isCondition1NextPageLoading = true;
+    isNextPageLoading = true;
 
     const visitedUrls = new Set([new URL(window.location.href).href]);
-    let nextUrl = getCondition1NextPageUrl();
+    let nextUrl = currentSite.getNextPageUrl();
 
     try {
       while (nextUrl && !visitedUrls.has(nextUrl)) {
         visitedUrls.add(nextUrl);
 
         const nextDocument = await fetchHtmlDocument(nextUrl);
-        const nextBundle = getCondition1Bundle(nextDocument);
-        const buildingBlocks = getCondition1BuildingBlocks(nextBundle);
-        const pageLabel = getCondition1PageLabel(nextDocument);
+        const nextBundle = currentSite.getBundle(nextDocument);
+        const buildingBlocks = currentSite.getBuildingBlocks(nextBundle);
+        const pageLabel = currentSite.getPageLabel(nextDocument);
 
         if (buildingBlocks.length === 0) {
           break;
         }
 
-        appendCondition1BuildingBlocks(buildingBlocks, pageLabel);
-        nextUrl = getCondition1NextPageUrl(nextDocument);
+        appendNextPageBlocks(buildingBlocks, pageLabel);
+        nextUrl = currentSite.getNextPageUrl(nextDocument);
       }
 
       scan();
     } finally {
-      isCondition1NextPageLoading = false;
+      isNextPageLoading = false;
     }
   }
 
-  async function loadConditionListNextPages() {
-    if (!isConditionListPage() || isConditionListNextPageLoading) return;
-    if (!getConditionListBundle()) return;
-
-    isConditionListNextPageLoading = true;
-
-    const visitedUrls = new Set([new URL(window.location.href).href]);
-    let nextUrl = getCondition1NextPageUrl();
-
-    try {
-      while (nextUrl && !visitedUrls.has(nextUrl)) {
-        visitedUrls.add(nextUrl);
-
-        const nextDocument = await fetchHtmlDocument(nextUrl);
-        const nextBundle = getConditionListBundle(nextDocument);
-        const buildingBlocks = getConditionListBuildingBlocks(nextBundle);
-        const pageLabel = getCondition1PageLabel(nextDocument);
-
-        if (buildingBlocks.length === 0) {
-          break;
-        }
-
-        appendConditionListBuildingBlocks(buildingBlocks, pageLabel);
-        nextUrl = getCondition1NextPageUrl(nextDocument);
-      }
-
-      scan();
-    } finally {
-      isConditionListNextPageLoading = false;
-    }
+  function getBuildingContainer(card) {
+    return currentSite.getBuildingContainer?.(card) || null;
   }
 
-  function syncCondition1BuildingVisibility(buildingContainers) {
+  function isCardVisible(card) {
+    return getDecoratedElements(card).some(element => !element.classList.contains('hc-filtered-out'));
+  }
+
+  function syncBuildingVisibility(buildingContainers) {
+    if (!currentSite.getContainerCards) return;
+
     buildingContainers.forEach(container => {
-      const hasVisibleRooms = [...container.querySelectorAll(CONDITION1_ROOM_SELECTOR)]
-        .some(room => !room.classList.contains('hc-filtered-out'));
-
-      container.classList.toggle('hc-building-filtered-out', !hasVisibleRooms);
+      const hasVisibleCards = currentSite.getContainerCards(container).some(isCardVisible);
+      container.classList.toggle('hc-building-filtered-out', !hasVisibleCards);
     });
   }
 
@@ -868,7 +991,7 @@
       });
     }
 
-    const badge = getPanel(card)?.querySelector('.hc-status-badge');
+    const badge = currentSite.getPanel(card)?.querySelector('.hc-status-badge');
     if (badge) {
       badge.textContent = option.badgeLabel;
     }
@@ -881,7 +1004,7 @@
     toolbar.className = 'hc-toolbar';
     toolbar.innerHTML = `
       <div class="hc-toolbar-inner">
-        <strong>HOME'S 条件一覧アシスト</strong>
+        <strong>${APP_TITLE}</strong>
         <div class="hc-filter-group">
           ${renderFilterCheckboxes()}
         </div>
@@ -953,7 +1076,7 @@
   function filterCards() {
     const buildingContainers = new Set();
 
-    document.querySelectorAll(ITEM_SELECTOR).forEach(card => {
+    document.querySelectorAll(currentSite.itemSelector).forEach(card => {
       const state = getResolvedState(card, getCardStorageIds(card).lookupIds).state;
       const isVisible = activeFilterValues.has(state.color);
 
@@ -961,17 +1084,17 @@
         element.classList.toggle('hc-filtered-out', !isVisible);
       });
 
-      const buildingContainer = getCondition1BuildingContainer(card);
+      const buildingContainer = getBuildingContainer(card);
       if (buildingContainer) {
         buildingContainers.add(buildingContainer);
       }
     });
 
-    syncCondition1BuildingVisibility(buildingContainers);
+    syncBuildingVisibility(buildingContainers);
   }
 
   function syncPanel(card, state) {
-    const panel = getPanel(card);
+    const panel = currentSite.getPanel(card);
     if (!panel) return;
 
     const colorSelect = panel.querySelector('.hc-color-select');
@@ -1008,7 +1131,7 @@
   }
 
   function refreshAllCards() {
-    document.querySelectorAll(ITEM_SELECTOR).forEach(refreshCard);
+    document.querySelectorAll(currentSite.itemSelector).forEach(refreshCard);
     filterCards();
     updateToolbarSyncStatus();
   }
@@ -1076,22 +1199,53 @@
     return panel;
   }
 
-  function getPanelMountPoint(card) {
-    if (isCondition1Room(card)) {
-      const memberRow = getCondition1Rows(card)
-        .find(row => row.matches('.memberDataRow, .prg-memberDataRow'));
+  function mountHomesCondition1Panel(card, panel) {
+    const memberRow = getHomesCondition1Rows(card)
+      .find(row => row.matches('.memberDataRow, .prg-memberDataRow'));
 
-      return memberRow?.querySelector('td')
-        || card.querySelector('td.layout')
-        || card.lastElementChild
-        || card;
-    }
+    const mountPoint = memberRow?.querySelector('td')
+      || card.querySelector('td.layout')
+      || card.lastElementChild
+      || card;
 
-    return (
+    mountPoint.appendChild(panel);
+  }
+
+  function mountHomesDefaultPanel(card, panel) {
+    const mountPoint = (
       card.querySelector('.moduleInner')
       || card.querySelector('.moduleBody')
       || card
     );
+
+    mountPoint.appendChild(panel);
+  }
+
+  function getSuumoPanelColSpan(card) {
+    return card.closest('table')?.querySelector('thead tr')?.children.length
+      || card.querySelector('tr')?.children.length
+      || 1;
+  }
+
+  function mountSuumoPanel(card, panel) {
+    const row = document.createElement('tr');
+    row.className = 'hc-panel-host';
+
+    const cell = document.createElement('td');
+    cell.className = 'hc-panel-cell';
+    cell.colSpan = getSuumoPanelColSpan(card);
+    cell.appendChild(panel);
+
+    row.appendChild(cell);
+    card.appendChild(row);
+  }
+
+  function getSuumoBuildingContainer(card) {
+    return card.closest('li');
+  }
+
+  function getSuumoContainerCards(container) {
+    return [...container.querySelectorAll('table.cassetteitem_other > tbody')];
   }
 
   function enhanceCard(card) {
@@ -1100,11 +1254,9 @@
 
     const { writeIds, lookupIds } = setCardStorageIds(card);
     const state = getResolvedState(card, lookupIds).state;
-    const mountPoint = getPanelMountPoint(card);
-
     const panel = createPanel(card, writeIds, state);
-    mountPoint.appendChild(panel);
 
+    currentSite.mountPanel(card, panel);
     refreshCard(card);
   }
 
@@ -1144,7 +1296,7 @@
 
   function scan() {
     createToolbar();
-    document.querySelectorAll(ITEM_SELECTOR).forEach(enhanceCard);
+    document.querySelectorAll(currentSite.itemSelector).forEach(enhanceCard);
     filterCards();
     updateToolbarSyncStatus();
   }
@@ -1163,11 +1315,8 @@
       subtree: true
     });
 
-    void loadCondition1NextPages().catch(error => {
-      console.error('Failed to load condition1 next pages', error);
-    });
-    void loadConditionListNextPages().catch(error => {
-      console.error('Failed to load condition-list next pages', error);
+    void loadNextPages().catch(error => {
+      console.error('Failed to load next pages', error);
     });
   }
 

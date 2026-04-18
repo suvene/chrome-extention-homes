@@ -75,6 +75,10 @@
   letter-spacing: .04em;
 }
 
+.hc-page-separator-item {
+  list-style: none;
+}
+
 .hc-panel {
   margin-top: 12px;
   padding: 10px 12px;
@@ -126,7 +130,8 @@
 }
 
 .mod-newArrivalBuilding,
-tr.prg-roomRow {
+tr.prg-roomRow,
+table.cassetteitem_other > tbody {
   transition: opacity .18s ease, transform .18s ease, box-shadow .18s ease;
 }
 
@@ -139,6 +144,14 @@ tr.prg-roomRow.hc-color-red > td {
   background: #fff5f5;
 }
 
+table.cassetteitem_other > tbody.hc-color-red > tr > td {
+  background: #fff5f5;
+}
+
+table.cassetteitem_other > tbody.hc-color-red > tr:first-child > td:first-child {
+  box-shadow: inset 6px 0 0 #ef4444;
+}
+
 .mod-newArrivalBuilding.hc-color-orange {
   box-shadow: inset 6px 0 0 #f59e0b;
   background: #fffaf0;
@@ -146,6 +159,14 @@ tr.prg-roomRow.hc-color-red > td {
 
 tr.prg-roomRow.hc-color-orange > td {
   background: #fffaf0;
+}
+
+table.cassetteitem_other > tbody.hc-color-orange > tr > td {
+  background: #fffaf0;
+}
+
+table.cassetteitem_other > tbody.hc-color-orange > tr:first-child > td:first-child {
+  box-shadow: inset 6px 0 0 #f59e0b;
 }
 
 .mod-newArrivalBuilding.hc-color-green {
@@ -157,6 +178,14 @@ tr.prg-roomRow.hc-color-green > td {
   background: #f0fdf4;
 }
 
+table.cassetteitem_other > tbody.hc-color-green > tr > td {
+  background: #f0fdf4;
+}
+
+table.cassetteitem_other > tbody.hc-color-green > tr:first-child > td:first-child {
+  box-shadow: inset 6px 0 0 #10b981;
+}
+
 .mod-newArrivalBuilding.hc-color-blue {
   box-shadow: inset 6px 0 0 #3b82f6;
   background: #eff6ff;
@@ -164,6 +193,14 @@ tr.prg-roomRow.hc-color-green > td {
 
 tr.prg-roomRow.hc-color-blue > td {
   background: #eff6ff;
+}
+
+table.cassetteitem_other > tbody.hc-color-blue > tr > td {
+  background: #eff6ff;
+}
+
+table.cassetteitem_other > tbody.hc-color-blue > tr:first-child > td:first-child {
+  box-shadow: inset 6px 0 0 #3b82f6;
 }
 
 .mod-newArrivalBuilding.hc-color-gray {
@@ -175,6 +212,14 @@ tr.prg-roomRow.hc-color-gray > td {
   background: #f3f4f6;
 }
 
+table.cassetteitem_other > tbody.hc-color-gray > tr > td {
+  background: #f3f4f6;
+}
+
+table.cassetteitem_other > tbody.hc-color-gray > tr:first-child > td:first-child {
+  box-shadow: inset 6px 0 0 #6b7280;
+}
+
 .mod-newArrivalBuilding.hc-filtered-out {
   display: none !important;
 }
@@ -183,6 +228,15 @@ tr.prg-roomRow.hc-filtered-out {
   display: none !important;
 }
 
+table.cassetteitem_other > tbody.hc-filtered-out {
+  display: none !important;
+}
+
 .hc-building-filtered-out {
   display: none !important;
+}
+
+tr.hc-panel-host > td.hc-panel-cell {
+  padding: 0 0 8px;
+  border-bottom: 1px solid #e5e7eb;
 }
