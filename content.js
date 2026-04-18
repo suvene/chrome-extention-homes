@@ -787,6 +787,26 @@
     return unique(getGroupMembersByGroupId(getEffectiveGroupId(listingId)));
   }
 
+  function getDuplicateLinkedListingIdsOnPage() {
+    const seenManualGroups = new Set();
+    const duplicateListingIds = new Set();
+
+    document.querySelectorAll(currentSite.itemSelector).forEach(card => {
+      const listingId = getCardIdentity(card).listingId;
+      const manualGroupId = linkGroupCache[listingId];
+      if (!manualGroupId) return;
+
+      if (seenManualGroups.has(manualGroupId)) {
+        duplicateListingIds.add(listingId);
+        return;
+      }
+
+      seenManualGroups.add(manualGroupId);
+    });
+
+    return duplicateListingIds;
+  }
+
   function getCandidateListingIds(listingId) {
     const currentRecord = listingRegistry[listingId];
     const linkedIds = new Set(getLinkedListingIds(listingId));
@@ -1448,10 +1468,12 @@
 
   function filterCards() {
     const buildingContainers = new Set();
+    const duplicateListingIds = getDuplicateLinkedListingIdsOnPage();
 
     document.querySelectorAll(currentSite.itemSelector).forEach(card => {
+      const listingId = getCardIdentity(card).listingId;
       const state = getResolvedState(card).state;
-      const isVisible = activeFilterValues.has(state.color);
+      const isVisible = activeFilterValues.has(state.color) && !duplicateListingIds.has(listingId);
 
       getDecoratedElements(card).forEach(element => {
         element.classList.toggle('hc-filtered-out', !isVisible);

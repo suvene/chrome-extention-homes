@@ -30,6 +30,7 @@ const requiredPatterns = [
   'function getHomesDetailUrl',
   'function getSuumoDetailUrl',
   'function getCandidateListingIds',
+  'function getDuplicateLinkedListingIdsOnPage',
   'function findListingIdByDetailUrl',
   'async function applySelectedLinkIds',
   'async function applyRowLinkAction',
@@ -221,12 +222,12 @@ function checkSampleFixtures() {
 function checkStorageDocVersion() {
   console.log('Checking storage documentation version...');
 
-  const latestDocPath = path.join(docsPath, 'storage_sync_v1.9.md');
+  const latestDocPath = path.join(docsPath, 'storage_sync_v1.10.md');
   if (!fs.existsSync(latestDocPath)) {
-    throw new Error('Latest storage sync doc must be versioned as docs/storage_sync_v1.9.md.');
+    throw new Error('Latest storage sync doc must be versioned as docs/storage_sync_v1.10.md.');
   }
 
-  if (fs.existsSync(path.join(docsPath, 'storage_sync_v1.8.md'))) {
+  if (fs.existsSync(path.join(docsPath, 'storage_sync_v1.9.md'))) {
     throw new Error('Older latest storage sync doc should have been removed after version bump.');
   }
 }
