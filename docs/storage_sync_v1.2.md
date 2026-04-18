@@ -16,7 +16,8 @@
 
 ## JSONバックアップ方針
 - JSON書き出しは、保存済みの全物件状態をまとめてファイル化する。
-- 書き出しファイル名は `homes-condition-notes-YYMMDD-HHMMSS.json` とし、作成日時が一覧で判別できるようにする。
+- 書き出しファイル名は `homes-condition-notes-YYMMDD-HHMMSS.json` とし、書き出し対象データの `updatedAt` の最大値を使う。
+- 書き出し対象に更新済みデータが 1 件もない場合だけ、ファイル名は書き出し実行時刻へ fallback する。
 - 書き出し形式は次の envelope を正本とする。
 
 ```json
