@@ -1,4 +1,4 @@
-# storage_sync_v1.7.md
+# storage_sync_v1.8.md
 
 ## 目的
 - HOME'S / SUUMO の一覧で付けたステータスとコメントを、同じブラウザ内の `chrome.storage.local` に保存する。
@@ -70,7 +70,8 @@
   ここでの `N` は自分自身を含まず、他の掲載との紐づき件数だけを数える。
 - `紐づけ一覧` には site、物件名リンク、家賃、住所、状態ラベルを表示する。
 - `紐づけ一覧` に自分自身の掲載は表示しない。
-- linked な掲載は checked かつ操作不可で表示する。
+- linked な掲載も checkbox を操作できるようにし、checked を外した相手だけ current listing から個別に切り離せるようにする。
 - 候補掲載は unchecked の checkbox で表示し、明示的に選んだものだけ再紐づけする。
+- `リンクを更新` は checkbox の現在状態を正本として、追加リンクと個別解除をまとめて反映する。
 - `この掲載の紐づけを解除` は、他の掲載と実際に linked されているときだけ有効にする。
 - `詳細URLを貼り付けてリンク` では、台帳に保存済みの detail URL と一致する掲載を見つけ、fingerprint が一致しなくても manual link group へ参加させられる。

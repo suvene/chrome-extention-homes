@@ -56,6 +56,28 @@
   align-items: center;
 }
 
+.hc-filter-checkbox,
+.hc-link-candidate-checkbox {
+  appearance: auto !important;
+  -webkit-appearance: checkbox !important;
+  display: inline-block !important;
+  position: static !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  clip: auto !important;
+  clip-path: none !important;
+  inline-size: 16px !important;
+  block-size: 16px !important;
+  min-width: 16px !important;
+  min-height: 16px !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: initial !important;
+  accent-color: #2563eb;
+  flex: 0 0 auto;
+  cursor: pointer;
+}
+
 .hc-toolbar button,
 .hc-toolbar select {
   font-size: 14px;
@@ -151,7 +173,6 @@
 }
 
 .hc-link-update-button,
-.hc-unlink-button,
 .hc-link-url-button {
   font-size: 12px;
   padding: 6px 10px;
@@ -163,13 +184,11 @@
 }
 
 .hc-link-update-button:hover,
-.hc-unlink-button:hover,
 .hc-link-url-button:hover {
   background: #f8fafc;
 }
 
 .hc-link-update-button:disabled,
-.hc-unlink-button:disabled,
 .hc-link-url-button:disabled {
   opacity: .45;
   cursor: not-allowed;
@@ -206,6 +225,15 @@
   border: 1px solid #e2e8f0;
   border-radius: 8px;
   background: #fff;
+}
+
+.hc-link-candidate-checkbox {
+  margin-top: 2px !important;
+}
+
+.hc-link-candidate-checkbox:disabled,
+.hc-filter-checkbox:disabled {
+  cursor: not-allowed;
 }
 
 .hc-link-item.is-selectable {

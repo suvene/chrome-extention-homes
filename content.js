@@ -1463,7 +1463,11 @@
   }
 
   function getLinkSelection(listingId) {
-    return new Set(linkSelectionCache.get(listingId) || []);
+    if (linkSelectionCache.has(listingId)) {
+      return new Set(linkSelectionCache.get(listingId) || []);
+    }
+
+    return new Set(getLinkedListingIds(listingId).filter(candidateId => candidateId !== listingId));
   }
 
   function setLinkSelection(listingId, selectedIds) {
@@ -1493,9 +1497,9 @@
         listingId,
         record: listingRegistry[listingId],
         status: '紐づき中',
-        checked: true,
-        disabled: true,
-        selectable: false
+        checked: selectedCandidates.has(listingId),
+        disabled: false,
+        selectable: true
       });
     });
 
@@ -1567,8 +1571,6 @@
     const linkCount = buildLinkListRows(card).linkedCount;
     const linkCountElement = panel.querySelector('[data-hc-link-count]');
     const linkListElement = panel.querySelector('[data-hc-link-list]');
-    const unlinkButton = panel.querySelector('.hc-unlink-button');
-    const canUnlink = getLinkedListingIds(identity.listingId).length > 1;
 
     if (linkCountElement) {
       linkCountElement.textContent = `紐づき ${linkCount}件`;
@@ -1576,10 +1578,6 @@
 
     if (linkListElement) {
       linkListElement.innerHTML = renderLinkListMarkup(card);
-    }
-
-    if (unlinkButton) {
-      unlinkButton.disabled = !canUnlink;
     }
   }
 
@@ -1632,57 +1630,52 @@
     return `manual:${Date.now().toString(36)}:${Math.random().toString(36).slice(2, 8)}`;
   }
 
-  async function unlinkCurrentListing(card) {
-    const identity = getCardIdentity(card);
-    const linkedIds = getLinkedListingIds(identity.listingId);
-    const resolvedState = getResolvedState(card).state;
-
-    if (linkedIds.length <= 1) {
-      return;
-    }
-
-    linkGroupCache[identity.listingId] = createManualGroupId();
-    clearLinkSelection(identity.listingId);
-
-    await persistLinkGroupCache();
-    await writeStateForListingIds([identity.listingId], resolvedState, identity.title);
-    refreshAllCards();
-  }
-
   async function applyLinkSelection(card) {
     const identity = getCardIdentity(card);
-    const selectedIds = [...getLinkSelection(identity.listingId)];
+    const selectedIds = new Set(getLinkSelection(identity.listingId));
+    const currentLinkedIds = getLinkedListingIds(identity.listingId);
+    const currentLinkedOthers = currentLinkedIds.filter(listingId => listingId !== identity.listingId);
+    const retainedCurrentIds = currentLinkedOthers.filter(listingId => selectedIds.has(listingId));
+    const detachedCurrentIds = currentLinkedOthers.filter(listingId => !selectedIds.has(listingId));
+    const candidateIds = [...selectedIds].filter(listingId => !currentLinkedOthers.includes(listingId));
+    const nextCurrentGroupIds = new Set([identity.listingId, ...retainedCurrentIds]);
 
-    if (selectedIds.length === 0) {
-      delete linkGroupCache[identity.listingId];
-      await persistLinkGroupCache();
-      refreshAllCards();
-      return;
+    candidateIds.forEach(listingId => {
+      getLinkedListingIds(listingId).forEach(memberId => {
+        nextCurrentGroupIds.add(memberId);
+      });
+      nextCurrentGroupIds.add(listingId);
+    });
+
+    const nextCurrentGroupList = [...nextCurrentGroupIds];
+    const mergedState = getBestResolvedState(nextCurrentGroupList, identity.title).state;
+    const nextLinkGroups = { ...linkGroupCache };
+
+    nextCurrentGroupList.forEach(listingId => {
+      delete nextLinkGroups[listingId];
+    });
+    detachedCurrentIds.forEach(listingId => {
+      delete nextLinkGroups[listingId];
+    });
+
+    if (nextCurrentGroupList.length > 1 || detachedCurrentIds.length > 0) {
+      const nextGroupId = createManualGroupId();
+      nextCurrentGroupList.forEach(listingId => {
+        nextLinkGroups[listingId] = nextGroupId;
+      });
     }
 
-    const unifiedListingIds = new Set(getLinkedListingIds(identity.listingId));
-    unifiedListingIds.add(identity.listingId);
-
-    selectedIds.forEach(listingId => {
-      getLinkedListingIds(listingId).forEach(memberId => {
-        unifiedListingIds.add(memberId);
+    if (detachedCurrentIds.length > 0) {
+      const detachedGroupId = createManualGroupId();
+      detachedCurrentIds.forEach(listingId => {
+        nextLinkGroups[listingId] = detachedGroupId;
       });
-      unifiedListingIds.add(listingId);
-    });
+    }
 
-    const nextGroupId = createManualGroupId();
-    [...unifiedListingIds].forEach(listingId => {
-      linkGroupCache[listingId] = nextGroupId;
-    });
-
-    const mergedState = getBestResolvedState(
-      [...unifiedListingIds],
-      identity.title
-    ).state;
-
+    linkGroupCache = nextLinkGroups;
     clearLinkSelection(identity.listingId);
     await persistLinkGroupCache();
-    await writeStateForListingIds([...unifiedListingIds], mergedState, identity.title);
+    await writeStateForListingIds(nextCurrentGroupList, mergedState, identity.title);
     refreshAllCards();
   }
 
@@ -1726,7 +1719,6 @@
         <div class="hc-link-toolbar">
           <strong data-hc-link-count>紐づき 0件</strong>
           <button type="button" class="hc-link-update-button">リンクを更新</button>
-          <button type="button" class="hc-unlink-button">この掲載の紐づけを解除</button>
         </div>
         <div class="hc-link-direct">
           <input
@@ -1749,7 +1741,6 @@
     const commentArea = panel.querySelector('.hc-comment');
     const linkList = panel.querySelector('[data-hc-link-list]');
     const updateButton = panel.querySelector('.hc-link-update-button');
-    const unlinkButton = panel.querySelector('.hc-unlink-button');
     const detailUrlInput = panel.querySelector('.hc-link-url-input');
     const detailUrlButton = panel.querySelector('.hc-link-url-button');
 
@@ -1809,10 +1800,6 @@
 
     updateButton.addEventListener('click', async () => {
       await applyLinkSelection(card);
-    });
-
-    unlinkButton.addEventListener('click', async () => {
-      await unlinkCurrentListing(card);
     });
 
     detailUrlButton.addEventListener('click', async () => {
