@@ -26,6 +26,8 @@ const requiredPatterns = [
   'function normalizeRentText',
   'function normalizeListingRegistry',
   'function normalizeLinkGroupMap',
+  'function getHomesDetailUrl',
+  'function getSuumoDetailUrl',
   'function getCandidateListingIds',
   'async function unlinkCurrentListing',
   'async function applyLinkSelection',
@@ -37,6 +39,7 @@ const requiredPatterns = [
   'linkGroups: getExportableLinkGroups()',
   'ローカルに保存済み',
   '紐づけ一覧',
+  'class="hc-link-name"',
   'data-hc-last-updated',
   'data-hc-sync-state',
   'id="hc-export"',
@@ -99,6 +102,10 @@ function checkRequiredPatterns() {
 
   if (!css.includes('.hc-link-item')) {
     throw new Error('Required link item selector is missing from content.css');
+  }
+
+  if (!css.includes('.hc-link-summary')) {
+    throw new Error('Required compact link summary selector is missing from content.css');
   }
 
   if (!css.includes('table.cassetteitem_other > tbody.hc-filtered-out')) {
@@ -199,12 +206,12 @@ function checkSampleFixtures() {
 function checkStorageDocVersion() {
   console.log('Checking storage documentation version...');
 
-  const latestDocPath = path.join(docsPath, 'storage_sync_v1.4.md');
+  const latestDocPath = path.join(docsPath, 'storage_sync_v1.6.md');
   if (!fs.existsSync(latestDocPath)) {
-    throw new Error('Latest storage sync doc must be versioned as docs/storage_sync_v1.4.md.');
+    throw new Error('Latest storage sync doc must be versioned as docs/storage_sync_v1.6.md.');
   }
 
-  if (fs.existsSync(path.join(docsPath, 'storage_sync_v1.3.md'))) {
+  if (fs.existsSync(path.join(docsPath, 'storage_sync_v1.5.md'))) {
     throw new Error('Older latest storage sync doc should have been removed after version bump.');
   }
 }

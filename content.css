@@ -198,6 +198,7 @@
 .hc-link-meta {
   display: grid;
   gap: 6px;
+  min-width: 0;
 }
 
 .hc-link-badges {
@@ -219,6 +220,46 @@
 .hc-link-status {
   background: #dbeafe;
   color: #1d4ed8;
+}
+
+.hc-link-site {
+  background: #e2e8f0;
+  color: #334155;
+}
+
+.hc-link-summary {
+  display: flex;
+  gap: 8px 12px;
+  align-items: baseline;
+  flex-wrap: wrap;
+  min-width: 0;
+  color: #334155;
+  line-height: 1.5;
+}
+
+.hc-link-name {
+  color: #0f172a;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.hc-link-name:hover {
+  text-decoration: underline;
+}
+
+.hc-link-name.is-static {
+  text-decoration: none;
+}
+
+.hc-link-rent {
+  font-weight: 700;
+  color: #b45309;
+  white-space: nowrap;
+}
+
+.hc-link-address {
+  color: #475569;
+  min-width: 0;
 }
 
 .hc-link-site {

@@ -45,6 +45,7 @@
       getName: getHomesName,
       getAddress: getHomesAddress,
       getRent: getHomesRent,
+      getDetailUrl: getHomesDetailUrl,
       getDecoratedElements: getHomesCondition1Rows,
       getPanel: getHomesCondition1Panel,
       mountPanel: mountHomesCondition1Panel,
@@ -70,6 +71,7 @@
       getName: getHomesName,
       getAddress: getHomesAddress,
       getRent: getHomesRent,
+      getDetailUrl: getHomesDetailUrl,
       getDecoratedElements: card => [card],
       getPanel: getDefaultPanel,
       mountPanel: mountHomesDefaultPanel,
@@ -93,6 +95,7 @@
       getName: getSuumoName,
       getAddress: getSuumoAddress,
       getRent: getSuumoRent,
+      getDetailUrl: getSuumoDetailUrl,
       getDecoratedElements: card => [card],
       getPanel: getDefaultPanel,
       mountPanel: mountSuumoPanel,
@@ -355,6 +358,19 @@
     return '';
   }
 
+  function getHomesDetailUrl(card) {
+    const link = card.querySelector('a.prg-detailAnchor[href], td.detail a[href], .moduleHead a[href]');
+    const href = link?.getAttribute('href') || card.dataset?.href || card.querySelector('tr[data-href]')?.dataset?.href || '';
+    if (!href) return '';
+
+    try {
+      return new URL(href, window.location.href).href;
+    } catch (error) {
+      console.warn('Failed to resolve HOME\'S detail URL', error);
+      return '';
+    }
+  }
+
   function getSuumoClipKey(card) {
     return card.querySelector('.js-clipkey')?.value?.trim() || '';
   }
@@ -407,6 +423,18 @@
     return normalizeSpaces(card.querySelector('.cassetteitem_price--rent')?.textContent || '');
   }
 
+  function getSuumoDetailUrl(card) {
+    const href = getSuumoDetailLink(card)?.getAttribute('href') || '';
+    if (!href) return '';
+
+    try {
+      return new URL(href, window.location.href).href;
+    } catch (error) {
+      console.warn('Failed to resolve SUUMO detail URL', error);
+      return '';
+    }
+  }
+
   function buildCardIdentity(card) {
     const listingId = currentSite.getListingId(card);
     const lookupIds = unique([listingId, ...currentSite.getLegacyLookupIds(card)]);
@@ -423,6 +451,7 @@
         name,
         address,
         rent,
+        detailUrl: currentSite.getDetailUrl(card),
         fingerprint: buildListingFingerprint(name, address, rent),
         lastSeenAt: Date.now()
       }
@@ -498,6 +527,7 @@
       name: typeof record?.name === 'string' ? record.name.trim() : '',
       address: typeof record?.address === 'string' ? record.address.trim() : '',
       rent: typeof record?.rent === 'string' ? record.rent.trim() : '',
+      detailUrl: typeof record?.detailUrl === 'string' ? record.detailUrl.trim() : '',
       fingerprint: typeof record?.fingerprint === 'string' ? record.fingerprint.trim() : '',
       lastSeenAt: Number.isFinite(Number(record?.lastSeenAt)) ? Number(record.lastSeenAt) : 0
     };
@@ -688,6 +718,7 @@
       && current.name === merged.name
       && current.address === merged.address
       && current.rent === merged.rent
+      && current.detailUrl === merged.detailUrl
       && current.fingerprint === merged.fingerprint
       && current.lastSeenAt === merged.lastSeenAt
     ) {
@@ -974,6 +1005,7 @@
         || current.name !== merged.name
         || current.address !== merged.address
         || current.rent !== merged.rent
+        || current.detailUrl !== merged.detailUrl
         || current.fingerprint !== merged.fingerprint
         || current.lastSeenAt !== merged.lastSeenAt
       ) {
@@ -1443,32 +1475,21 @@
   function buildLinkListRows(card) {
     const identity = getCardIdentity(card);
     const linkedIds = getLinkedListingIds(identity.listingId);
-    const linkedSet = new Set(linkedIds);
+    const linkedListingIds = linkedIds.filter(listingId => listingId !== identity.listingId);
     const candidateIds = getCandidateListingIds(identity.listingId);
     const selectedCandidates = getLinkSelection(identity.listingId);
     const rows = [];
 
-    rows.push({
-      listingId: identity.listingId,
-      record: listingRegistry[identity.listingId] || identity.record,
-      status: '現在',
-      checked: true,
-      disabled: true,
-      selectable: false
-    });
-
-    linkedIds
-      .filter(listingId => listingId !== identity.listingId)
-      .forEach(listingId => {
-        rows.push({
-          listingId,
-          record: listingRegistry[listingId],
-          status: '紐づき中',
-          checked: true,
-          disabled: true,
-          selectable: false
-        });
+    linkedListingIds.forEach(listingId => {
+      rows.push({
+        listingId,
+        record: listingRegistry[listingId],
+        status: '紐づき中',
+        checked: true,
+        disabled: true,
+        selectable: false
       });
+    });
 
     candidateIds.forEach(listingId => {
       rows.push({
@@ -1482,7 +1503,7 @@
     });
 
     return {
-      linkedCount: linkedSet.size || 1,
+      linkedCount: linkedListingIds.length,
       rows
     };
   }
@@ -1500,6 +1521,10 @@
       const name = record.name || '物件名不明';
       const address = record.address || '住所不明';
       const rent = record.rent || '家賃不明';
+      const detailUrl = record.detailUrl || '';
+      const nameMarkup = detailUrl
+        ? `<a href="${escapeHtml(detailUrl)}" target="_blank" rel="noopener" class="hc-link-name">${escapeHtml(name)}</a>`
+        : `<span class="hc-link-name is-static">${escapeHtml(name)}</span>`;
 
       return `
         <label class="hc-link-item ${row.disabled ? 'is-locked' : 'is-selectable'}">
@@ -1515,10 +1540,10 @@
               <span class="hc-link-status">${escapeHtml(row.status)}</span>
               <span class="hc-link-site">${escapeHtml(siteLabel)}</span>
             </span>
-            <span class="hc-link-text">
-              <strong>${escapeHtml(name)}</strong>
-              <span>${escapeHtml(address)}</span>
-              <span>${escapeHtml(rent)}</span>
+            <span class="hc-link-summary">
+              ${nameMarkup}
+              <span class="hc-link-rent">${escapeHtml(rent)}</span>
+              <span class="hc-link-address">${escapeHtml(address)}</span>
             </span>
           </span>
         </label>
@@ -1535,6 +1560,7 @@
     const linkCountElement = panel.querySelector('[data-hc-link-count]');
     const linkListElement = panel.querySelector('[data-hc-link-list]');
     const unlinkButton = panel.querySelector('.hc-unlink-button');
+    const canUnlink = getLinkedListingIds(identity.listingId).length > 1;
 
     if (linkCountElement) {
       linkCountElement.textContent = `紐づき ${linkCount}件`;
@@ -1545,7 +1571,7 @@
     }
 
     if (unlinkButton) {
-      unlinkButton.disabled = getLinkedListingIds(identity.listingId).length <= 1;
+      unlinkButton.disabled = !canUnlink;
     }
   }
 
@@ -1674,7 +1700,7 @@
 
       <div class="hc-panel-row hc-panel-row-links">
         <div class="hc-link-toolbar">
-          <strong data-hc-link-count>紐づき 1件</strong>
+          <strong data-hc-link-count>紐づき 0件</strong>
           <button type="button" class="hc-link-update-button">リンクを更新</button>
           <button type="button" class="hc-unlink-button">この掲載の紐づけを解除</button>
         </div>

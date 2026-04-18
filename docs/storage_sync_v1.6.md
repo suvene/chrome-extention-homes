@@ -1,4 +1,4 @@
-# storage_sync_v1.4.md
+# storage_sync_v1.6.md
 
 ## 目的
 - HOME'S / SUUMO の一覧で付けたステータスとコメントを、同じブラウザ内の `chrome.storage.local` に保存する。
@@ -8,7 +8,7 @@
 ## 保存方針
 - 正本の保存先は `chrome.storage.local` とする。
 - 状態は `homes_state_v1` に `listingId -> { color, comment, title, updatedAt }` で保持する。
-- 掲載台帳は `homes_listing_registry_v1` に `listingId -> { site, name, address, rent, fingerprint, lastSeenAt }` で保持する。
+- 掲載台帳は `homes_listing_registry_v1` に `listingId -> { site, name, address, rent, detailUrl, fingerprint, lastSeenAt }` で保持する。
 - 手動の紐づき group は `homes_link_group_v1` に `listingId -> groupId` で保持する。
 - `groupId` がない掲載は、`auto:<fingerprint>` を実効 group として扱う。
 - `groupId` がある掲載は、その manual group を正本として扱う。
@@ -48,6 +48,7 @@
       "name": "サンプル物件",
       "address": "東京都品川区南大井1-2-3",
       "rent": "5.5万円",
+      "detailUrl": "https://www.homes.co.jp/chintai/room/a0649336242d91a967a399930c6e5ef1e6d33ebd/",
       "fingerprint": "sample|tokyo|5.5",
       "lastSeenAt": 1713360000000
     }
@@ -65,6 +66,9 @@
 
 ## UI方針
 - 各掲載 panel に `紐づき N件` を表示する。
-- `紐づけ一覧` には site、物件名、住所、家賃、状態ラベルを表示する。
+  ここでの `N` は自分自身を含まず、他の掲載との紐づき件数だけを数える。
+- `紐づけ一覧` には site、物件名リンク、家賃、住所、状態ラベルを表示する。
+- `紐づけ一覧` に自分自身の掲載は表示しない。
 - linked な掲載は checked かつ操作不可で表示する。
 - 候補掲載は unchecked の checkbox で表示し、明示的に選んだものだけ再紐づけする。
+- `この掲載の紐づけを解除` は、他の掲載と実際に linked されているときだけ有効にする。
