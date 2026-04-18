@@ -7,9 +7,9 @@ const contentPath = path.join(repoRoot, 'content.js');
 const cssPath = path.join(repoRoot, 'content.css');
 const docsPath = path.join(repoRoot, 'docs');
 const manifestPath = path.join(repoRoot, 'manifest.json');
-const homesCondition1SamplePath = path.join(repoRoot, "samples/home's/condition1-building.html");
-const homesConditionListSamplePath = path.join(repoRoot, "samples/home's/condition-list-bundle.html");
-const suumoSamplePath = path.join(repoRoot, 'samples/suumo/FR301FC001-list-bundle.html');
+const homesCondition1SamplePath = path.join(repoRoot, "samples/home's/260418-0100_condition1-building.html");
+const homesConditionListSamplePath = path.join(repoRoot, "samples/home's/260418-0100_condition-list-bundle.html");
+const suumoSamplePath = path.join(repoRoot, 'samples/suumo/260418-2136_FR301FC001-list-bundle.html');
 
 const requiredPatterns = [
   "const APP_TITLE = '賃貸物件 条件一覧アシスタント'",
