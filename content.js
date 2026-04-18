@@ -114,7 +114,6 @@
   let linkGroupCache = {};
   let activeFilterValues = new Set(DEFAULT_FILTER_VALUES);
   const commentSaveTimers = new Map();
-  const linkSelectionCache = new Map();
   let isNextPageLoading = false;
   let registryPersistTimerId = 0;
 
@@ -1462,34 +1461,11 @@
     syncBuildingVisibility(buildingContainers);
   }
 
-  function getLinkSelection(listingId) {
-    if (linkSelectionCache.has(listingId)) {
-      return new Set(linkSelectionCache.get(listingId) || []);
-    }
-
-    return new Set(getLinkedListingIds(listingId).filter(candidateId => candidateId !== listingId));
-  }
-
-  function setLinkSelection(listingId, selectedIds) {
-    const normalized = unique(selectedIds);
-    if (normalized.length === 0) {
-      linkSelectionCache.delete(listingId);
-      return;
-    }
-
-    linkSelectionCache.set(listingId, normalized);
-  }
-
-  function clearLinkSelection(listingId) {
-    linkSelectionCache.delete(listingId);
-  }
-
   function buildLinkListRows(card) {
     const identity = getCardIdentity(card);
     const linkedIds = getLinkedListingIds(identity.listingId);
     const linkedListingIds = linkedIds.filter(listingId => listingId !== identity.listingId);
     const candidateIds = getCandidateListingIds(identity.listingId);
-    const selectedCandidates = getLinkSelection(identity.listingId);
     const rows = [];
 
     linkedListingIds.forEach(listingId => {
@@ -1497,9 +1473,8 @@
         listingId,
         record: listingRegistry[listingId],
         status: '紐づき中',
-        checked: selectedCandidates.has(listingId),
-        disabled: false,
-        selectable: true
+        actionLabel: '解除',
+        actionValue: 'unlink'
       });
     });
 
@@ -1508,9 +1483,8 @@
         listingId,
         record: listingRegistry[listingId],
         status: '候補',
-        checked: selectedCandidates.has(listingId),
-        disabled: false,
-        selectable: true
+        actionLabel: 'リンク',
+        actionValue: 'link'
       });
     });
 
@@ -1539,14 +1513,7 @@
         : `<span class="hc-link-name is-static">${escapeHtml(name)}</span>`;
 
       return `
-        <label class="hc-link-item ${row.disabled ? 'is-locked' : 'is-selectable'}">
-          <input
-            type="checkbox"
-            class="hc-link-candidate-checkbox"
-            value="${escapeHtml(row.listingId)}"
-            ${row.checked ? 'checked' : ''}
-            ${row.disabled ? 'disabled' : ''}
-          >
+        <div class="hc-link-item ${row.actionValue === 'unlink' ? 'is-linked' : 'is-candidate'}">
           <span class="hc-link-meta">
             <span class="hc-link-badges">
               <span class="hc-link-status">${escapeHtml(row.status)}</span>
@@ -1558,7 +1525,15 @@
               <span class="hc-link-address">${escapeHtml(address)}</span>
             </span>
           </span>
-        </label>
+          <button
+            type="button"
+            class="hc-link-row-button"
+            data-hc-link-action="${escapeHtml(row.actionValue)}"
+            data-hc-link-id="${escapeHtml(row.listingId)}"
+          >
+            ${escapeHtml(row.actionLabel)}
+          </button>
+        </div>
       `;
     }).join('');
   }
@@ -1630,9 +1605,9 @@
     return `manual:${Date.now().toString(36)}:${Math.random().toString(36).slice(2, 8)}`;
   }
 
-  async function applyLinkSelection(card) {
+  async function applySelectedLinkIds(card, selectedIdsInput) {
     const identity = getCardIdentity(card);
-    const selectedIds = new Set(getLinkSelection(identity.listingId));
+    const selectedIds = new Set(selectedIdsInput);
     const currentLinkedIds = getLinkedListingIds(identity.listingId);
     const currentLinkedOthers = currentLinkedIds.filter(listingId => listingId !== identity.listingId);
     const retainedCurrentIds = currentLinkedOthers.filter(listingId => selectedIds.has(listingId));
@@ -1673,7 +1648,6 @@
     }
 
     linkGroupCache = nextLinkGroups;
-    clearLinkSelection(identity.listingId);
     await persistLinkGroupCache();
     await writeStateForListingIds(nextCurrentGroupList, mergedState, identity.title);
     refreshAllCards();
@@ -1688,11 +1662,22 @@
       return;
     }
 
-    const selectedIds = getLinkSelection(identity.listingId);
+    const selectedIds = new Set(getLinkedListingIds(identity.listingId).filter(listingId => listingId !== identity.listingId));
     selectedIds.add(targetListingId);
-    setLinkSelection(identity.listingId, [...selectedIds]);
     detailUrlInput.value = '';
-    await applyLinkSelection(card);
+    await applySelectedLinkIds(card, selectedIds);
+  }
+
+  async function applyRowLinkAction(card, targetListingId, action) {
+    const selectedIds = new Set(getLinkedListingIds(getCardIdentity(card).listingId).filter(listingId => listingId !== getCardIdentity(card).listingId));
+
+    if (action === 'unlink') {
+      selectedIds.delete(targetListingId);
+    } else {
+      selectedIds.add(targetListingId);
+    }
+
+    await applySelectedLinkIds(card, selectedIds);
   }
 
   function createPanel(card, listingId, state) {
@@ -1718,7 +1703,6 @@
       <div class="hc-panel-row hc-panel-row-links">
         <div class="hc-link-toolbar">
           <strong data-hc-link-count>紐づき 0件</strong>
-          <button type="button" class="hc-link-update-button">リンクを更新</button>
         </div>
         <div class="hc-link-direct">
           <input
@@ -1740,7 +1724,6 @@
     const colorSelect = panel.querySelector('.hc-color-select');
     const commentArea = panel.querySelector('.hc-comment');
     const linkList = panel.querySelector('[data-hc-link-list]');
-    const updateButton = panel.querySelector('.hc-link-update-button');
     const detailUrlInput = panel.querySelector('.hc-link-url-input');
     const detailUrlButton = panel.querySelector('.hc-link-url-button');
 
@@ -1782,24 +1765,15 @@
       await flushScheduledPersist(identity.listingId, identity.title);
     });
 
-    linkList.addEventListener('change', event => {
-      const checkbox = event.target.closest('.hc-link-candidate-checkbox');
-      if (!checkbox || checkbox.disabled) return;
+    linkList.addEventListener('click', async event => {
+      const actionButton = event.target.closest('[data-hc-link-action]');
+      if (!actionButton) return;
 
-      const identity = getCardIdentity(card);
-      const selectedIds = getLinkSelection(identity.listingId);
-
-      if (checkbox.checked) {
-        selectedIds.add(checkbox.value);
-      } else {
-        selectedIds.delete(checkbox.value);
-      }
-
-      setLinkSelection(identity.listingId, [...selectedIds]);
-    });
-
-    updateButton.addEventListener('click', async () => {
-      await applyLinkSelection(card);
+      await applyRowLinkAction(
+        card,
+        actionButton.getAttribute('data-hc-link-id') || '',
+        actionButton.getAttribute('data-hc-link-action') || ''
+      );
     });
 
     detailUrlButton.addEventListener('click', async () => {

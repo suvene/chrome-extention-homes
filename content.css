@@ -56,8 +56,7 @@
   align-items: center;
 }
 
-.hc-filter-checkbox,
-.hc-link-candidate-checkbox {
+.hc-filter-checkbox {
   appearance: auto !important;
   -webkit-appearance: checkbox !important;
   display: inline-block !important;
@@ -172,7 +171,6 @@
   color: #1f2937;
 }
 
-.hc-link-update-button,
 .hc-link-url-button {
   font-size: 12px;
   padding: 6px 10px;
@@ -183,12 +181,10 @@
   cursor: pointer;
 }
 
-.hc-link-update-button:hover,
 .hc-link-url-button:hover {
   background: #f8fafc;
 }
 
-.hc-link-update-button:disabled,
 .hc-link-url-button:disabled {
   opacity: .45;
   cursor: not-allowed;
@@ -218,36 +214,48 @@
 
 .hc-link-item {
   display: grid;
-  grid-template-columns: auto 1fr;
+  grid-template-columns: 1fr auto;
   gap: 10px;
-  align-items: start;
+  align-items: center;
   padding: 8px 10px;
   border: 1px solid #e2e8f0;
   border-radius: 8px;
   background: #fff;
 }
 
-.hc-link-candidate-checkbox {
-  margin-top: 2px !important;
-}
-
-.hc-link-candidate-checkbox:disabled,
 .hc-filter-checkbox:disabled {
   cursor: not-allowed;
-}
-
-.hc-link-item.is-selectable {
-  cursor: pointer;
-}
-
-.hc-link-item.is-locked {
-  background: #f8fafc;
 }
 
 .hc-link-meta {
   display: grid;
   gap: 6px;
   min-width: 0;
+}
+
+.hc-link-row-button {
+  font-size: 11px;
+  padding: 4px 10px;
+  border: 1px solid #cbd5e1;
+  border-radius: 999px;
+  background: #fff;
+  color: #334155;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.hc-link-row-button:hover {
+  background: #f8fafc;
+}
+
+.hc-link-item.is-linked .hc-link-row-button {
+  border-color: #fca5a5;
+  color: #b91c1c;
+}
+
+.hc-link-item.is-candidate .hc-link-row-button {
+  border-color: #93c5fd;
+  color: #1d4ed8;
 }
 
 .hc-link-badges {

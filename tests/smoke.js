@@ -31,7 +31,8 @@ const requiredPatterns = [
   'function getSuumoDetailUrl',
   'function getCandidateListingIds',
   'function findListingIdByDetailUrl',
-  'async function applyLinkSelection',
+  'async function applySelectedLinkIds',
+  'async function applyRowLinkAction',
   'async function applyDetailUrlLink',
   'function buildExportPayload',
   'function parseImportPayload',
@@ -41,6 +42,7 @@ const requiredPatterns = [
   '紐づけ一覧',
   'class="hc-link-name"',
   'class="hc-link-url-input"',
+  'data-hc-link-action',
   'URLでリンク',
   'data-hc-last-updated',
   'id="hc-export"',
@@ -113,8 +115,8 @@ function checkRequiredPatterns() {
     throw new Error('Required detail URL input selector is missing from content.css');
   }
 
-  if (!css.includes('.hc-link-candidate-checkbox')) {
-    throw new Error('Required link checkbox selector is missing from content.css');
+  if (!css.includes('.hc-link-row-button')) {
+    throw new Error('Required row action button selector is missing from content.css');
   }
 
   if (css.includes('.hc-unlink-button')) {
@@ -219,12 +221,12 @@ function checkSampleFixtures() {
 function checkStorageDocVersion() {
   console.log('Checking storage documentation version...');
 
-  const latestDocPath = path.join(docsPath, 'storage_sync_v1.8.md');
+  const latestDocPath = path.join(docsPath, 'storage_sync_v1.9.md');
   if (!fs.existsSync(latestDocPath)) {
-    throw new Error('Latest storage sync doc must be versioned as docs/storage_sync_v1.8.md.');
+    throw new Error('Latest storage sync doc must be versioned as docs/storage_sync_v1.9.md.');
   }
 
-  if (fs.existsSync(path.join(docsPath, 'storage_sync_v1.7.md'))) {
+  if (fs.existsSync(path.join(docsPath, 'storage_sync_v1.8.md'))) {
     throw new Error('Older latest storage sync doc should have been removed after version bump.');
   }
 }
