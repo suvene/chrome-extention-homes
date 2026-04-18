@@ -196,6 +196,22 @@
     return match?.[1] || '';
   }
 
+  function normalizeDetailUrl(value) {
+    if (typeof value !== 'string' || !value.trim()) {
+      return '';
+    }
+
+    try {
+      const url = new URL(value, window.location.href);
+      url.hash = '';
+      url.searchParams.sort();
+      return url.toString();
+    } catch (error) {
+      console.warn('Failed to normalize detail URL', error);
+      return '';
+    }
+  }
+
   function buildListingFingerprint(name, address, rent) {
     const normalizedName = normalizePropertyName(name);
     const normalizedAddress = normalizeAddressText(address);
@@ -527,7 +543,7 @@
       name: typeof record?.name === 'string' ? record.name.trim() : '',
       address: typeof record?.address === 'string' ? record.address.trim() : '',
       rent: typeof record?.rent === 'string' ? record.rent.trim() : '',
-      detailUrl: typeof record?.detailUrl === 'string' ? record.detailUrl.trim() : '',
+      detailUrl: normalizeDetailUrl(record?.detailUrl),
       fingerprint: typeof record?.fingerprint === 'string' ? record.fingerprint.trim() : '',
       lastSeenAt: Number.isFinite(Number(record?.lastSeenAt)) ? Number(record.lastSeenAt) : 0
     };
@@ -782,6 +798,16 @@
     }
 
     return unique(candidateIds);
+  }
+
+  function findListingIdByDetailUrl(detailUrl, currentListingId = '') {
+    const normalizedUrl = normalizeDetailUrl(detailUrl);
+    if (!normalizedUrl) return '';
+
+    return Object.entries(listingRegistry).find(([listingId, record]) => {
+      if (listingId === currentListingId) return false;
+      return normalizeDetailUrl(record?.detailUrl) === normalizedUrl;
+    })?.[0] || '';
   }
 
   function getBestResolvedState(ids, defaultTitle) {
@@ -1660,6 +1686,22 @@
     refreshAllCards();
   }
 
+  async function applyDetailUrlLink(card, detailUrlInput) {
+    const identity = getCardIdentity(card);
+    const targetListingId = findListingIdByDetailUrl(detailUrlInput.value, identity.listingId);
+
+    if (!targetListingId) {
+      window.alert('入力した詳細URLに一致する掲載がローカル台帳に見つかりませんでした。先にその掲載を一度読み込んでください。');
+      return;
+    }
+
+    const selectedIds = getLinkSelection(identity.listingId);
+    selectedIds.add(targetListingId);
+    setLinkSelection(identity.listingId, [...selectedIds]);
+    detailUrlInput.value = '';
+    await applyLinkSelection(card);
+  }
+
   function createPanel(card, listingId, state) {
     const panel = document.createElement('div');
     panel.className = 'hc-panel';
@@ -1686,6 +1728,15 @@
           <button type="button" class="hc-link-update-button">リンクを更新</button>
           <button type="button" class="hc-unlink-button">この掲載の紐づけを解除</button>
         </div>
+        <div class="hc-link-direct">
+          <input
+            type="url"
+            class="hc-link-url-input"
+            placeholder="詳細URLを貼り付けてリンク"
+            inputmode="url"
+          >
+          <button type="button" class="hc-link-url-button">URLでリンク</button>
+        </div>
       </div>
 
       <div class="hc-panel-row hc-panel-row-links-list">
@@ -1699,6 +1750,8 @@
     const linkList = panel.querySelector('[data-hc-link-list]');
     const updateButton = panel.querySelector('.hc-link-update-button');
     const unlinkButton = panel.querySelector('.hc-unlink-button');
+    const detailUrlInput = panel.querySelector('.hc-link-url-input');
+    const detailUrlButton = panel.querySelector('.hc-link-url-button');
 
     colorSelect.value = state.color;
     commentArea.value = state.comment || '';
@@ -1760,6 +1813,16 @@
 
     unlinkButton.addEventListener('click', async () => {
       await unlinkCurrentListing(card);
+    });
+
+    detailUrlButton.addEventListener('click', async () => {
+      await applyDetailUrlLink(card, detailUrlInput);
+    });
+
+    detailUrlInput.addEventListener('keydown', async event => {
+      if (event.key !== 'Enter') return;
+      event.preventDefault();
+      await applyDetailUrlLink(card, detailUrlInput);
     });
 
     return panel;

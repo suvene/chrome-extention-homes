@@ -137,13 +137,22 @@
   flex-wrap: wrap;
 }
 
+.hc-link-direct {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-top: 8px;
+}
+
 .hc-link-toolbar strong {
   font-size: 13px;
   color: #1f2937;
 }
 
 .hc-link-update-button,
-.hc-unlink-button {
+.hc-unlink-button,
+.hc-link-url-button {
   font-size: 12px;
   padding: 6px 10px;
   border: 1px solid #cbd5e1;
@@ -154,14 +163,26 @@
 }
 
 .hc-link-update-button:hover,
-.hc-unlink-button:hover {
+.hc-unlink-button:hover,
+.hc-link-url-button:hover {
   background: #f8fafc;
 }
 
 .hc-link-update-button:disabled,
-.hc-unlink-button:disabled {
+.hc-unlink-button:disabled,
+.hc-link-url-button:disabled {
   opacity: .45;
   cursor: not-allowed;
+}
+
+.hc-link-url-input {
+  flex: 1 1 340px;
+  min-width: 220px;
+  font-size: 12px;
+  padding: 6px 8px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  background: #fff;
 }
 
 .hc-link-list {

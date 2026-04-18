@@ -1,4 +1,4 @@
-# storage_sync_v1.6.md
+# storage_sync_v1.7.md
 
 ## 目的
 - HOME'S / SUUMO の一覧で付けたステータスとコメントを、同じブラウザ内の `chrome.storage.local` に保存する。
@@ -13,6 +13,7 @@
 - `groupId` がない掲載は、`auto:<fingerprint>` を実効 group として扱う。
 - `groupId` がある掲載は、その manual group を正本として扱う。
 - fingerprint は、正規化した `物件名 + 住所 + 家賃` から導く。
+- detail URL は query 順や hash の揺れを正規化して保持し、手動リンクの検索キーとしても使う。
 - 正規化では全角/半角英数、空白、ハイフン、丁目/番地表記の揺れを吸収する。
 - 家賃は base rent のみを使い、管理費は fingerprint に含めない。
 - fingerprint を作れない掲載は自動候補を持たず、listingId 単位でのみ扱う。
@@ -72,3 +73,4 @@
 - linked な掲載は checked かつ操作不可で表示する。
 - 候補掲載は unchecked の checkbox で表示し、明示的に選んだものだけ再紐づけする。
 - `この掲載の紐づけを解除` は、他の掲載と実際に linked されているときだけ有効にする。
+- `詳細URLを貼り付けてリンク` では、台帳に保存済みの detail URL と一致する掲載を見つけ、fingerprint が一致しなくても manual link group へ参加させられる。

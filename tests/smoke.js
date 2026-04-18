@@ -24,13 +24,16 @@ const requiredPatterns = [
   'function buildListingFingerprint',
   'function normalizeAddressText',
   'function normalizeRentText',
+  'function normalizeDetailUrl',
   'function normalizeListingRegistry',
   'function normalizeLinkGroupMap',
   'function getHomesDetailUrl',
   'function getSuumoDetailUrl',
   'function getCandidateListingIds',
+  'function findListingIdByDetailUrl',
   'async function unlinkCurrentListing',
   'async function applyLinkSelection',
+  'async function applyDetailUrlLink',
   'const resolvedState = getResolvedState(card).state;',
   'function buildExportPayload',
   'function parseImportPayload',
@@ -39,6 +42,8 @@ const requiredPatterns = [
   'linkGroups: getExportableLinkGroups()',
   '紐づけ一覧',
   'class="hc-link-name"',
+  'class="hc-link-url-input"',
+  'URLでリンク',
   'data-hc-last-updated',
   'id="hc-export"',
   'id="hc-import"'
@@ -104,6 +109,10 @@ function checkRequiredPatterns() {
 
   if (!css.includes('.hc-link-summary')) {
     throw new Error('Required compact link summary selector is missing from content.css');
+  }
+
+  if (!css.includes('.hc-link-url-input')) {
+    throw new Error('Required detail URL input selector is missing from content.css');
   }
 
   if (!css.includes('table.cassetteitem_other > tbody.hc-filtered-out')) {
@@ -204,12 +213,12 @@ function checkSampleFixtures() {
 function checkStorageDocVersion() {
   console.log('Checking storage documentation version...');
 
-  const latestDocPath = path.join(docsPath, 'storage_sync_v1.6.md');
+  const latestDocPath = path.join(docsPath, 'storage_sync_v1.7.md');
   if (!fs.existsSync(latestDocPath)) {
-    throw new Error('Latest storage sync doc must be versioned as docs/storage_sync_v1.6.md.');
+    throw new Error('Latest storage sync doc must be versioned as docs/storage_sync_v1.7.md.');
   }
 
-  if (fs.existsSync(path.join(docsPath, 'storage_sync_v1.5.md'))) {
+  if (fs.existsSync(path.join(docsPath, 'storage_sync_v1.6.md'))) {
     throw new Error('Older latest storage sync doc should have been removed after version bump.');
   }
 }
