@@ -339,7 +339,12 @@
   }
 
   function getHomesName(card) {
-    return normalizeSpaces(card?.querySelector('.bukkenName')?.textContent || '');
+    const root =
+      card.closest('.moduleInner.prg-building')
+      || card.closest('.mod-newArrivalBuilding')
+      || card;
+
+    return normalizeSpaces(root?.querySelector('.bukkenName')?.textContent || '');
   }
 
   function getHomesTitle(card) {
