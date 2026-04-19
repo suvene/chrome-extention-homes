@@ -359,11 +359,9 @@
   gap: 4px;
   width: 100%;
   padding: 8px 10px;
-  text-align: left;
   border: 1px solid #dbe4f0;
   border-radius: 8px;
   background: #fff;
-  cursor: pointer;
 }
 
 .hc-link-suggestion-item:hover {
@@ -383,6 +381,19 @@
   font-size: 12px;
   font-weight: 700;
   color: #1f2937;
+  text-decoration: none;
+}
+
+.hc-link-suggestion-name:hover {
+  text-decoration: underline;
+}
+
+.hc-link-suggestion-name.is-static {
+  text-decoration: none;
+}
+
+.hc-link-suggestion-action {
+  margin-left: auto;
 }
 
 .hc-link-suggestion-url {

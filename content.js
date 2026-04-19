@@ -1955,15 +1955,21 @@
       const badgesMarkup = renderLinkMetadataBadges(suggestion.listingId, record, {
         showEditButton: false
       });
+      const nameMarkup = detailUrl
+        ? `<a href="${escapeHtml(detailUrl)}" target="_blank" rel="noopener" class="hc-link-suggestion-name">${escapeHtml(name)}</a>`
+        : `<span class="hc-link-suggestion-name is-static">${escapeHtml(name)}</span>`;
 
       return `
-        <button
-          type="button"
-          class="hc-link-suggestion-item"
-          data-hc-suggest-url="${escapeHtml(detailUrl)}"
-        >
+        <div class="hc-link-suggestion-item">
           <span class="hc-link-suggestion-top">
-            <span class="hc-link-suggestion-name">${escapeHtml(name)}</span>
+            ${nameMarkup}
+            <button
+              type="button"
+              class="hc-link-row-button hc-link-suggestion-action"
+              data-hc-suggest-url="${escapeHtml(detailUrl)}"
+            >
+              リンク
+            </button>
           </span>
           ${badgesMarkup}
           <span class="hc-link-suggestion-meta">
@@ -1971,7 +1977,7 @@
             <span class="hc-link-address">${escapeHtml(address)}</span>
           </span>
           <span class="hc-link-suggestion-url">${escapeHtml(detailUrl)}</span>
-        </button>
+        </div>
       `;
     }).join('');
   }
