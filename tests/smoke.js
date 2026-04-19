@@ -10,6 +10,8 @@ const manifestPath = path.join(repoRoot, 'manifest.json');
 const homesCondition1SamplePath = path.join(repoRoot, "samples/home's/260418-0100_condition1-building.html");
 const homesConditionListSamplePath = path.join(repoRoot, "samples/home's/260418-0100_condition-list-bundle.html");
 const suumoSamplePath = path.join(repoRoot, 'samples/suumo/260418-2136_FR301FC001-list-bundle.html');
+const athomeBundleSamplePath = path.join(repoRoot, 'samples/athome/260420-0339_tokyo-list_bundle.html');
+const athomePagerSamplePath = path.join(repoRoot, 'samples/athome/260420-0339_tokyo-list_page-selector.html');
 
 const requiredPatterns = [
   "const APP_TITLE = '賃貸物件 条件一覧アシスタント'",
@@ -22,6 +24,7 @@ const requiredPatterns = [
   "id: 'homes-condition1'",
   "id: 'homes-condition-list'",
   "id: 'suumo-fr301fc001'",
+  "id: 'athome-tokyo-list'",
   'function buildListingFingerprint',
   'function normalizeAddressText',
   'function normalizeAddressPrefixToFirstNumber',
@@ -32,6 +35,10 @@ const requiredPatterns = [
   'function normalizeLinkGroupMap',
   'function getHomesDetailUrl',
   'function getSuumoDetailUrl',
+  'function getAthomeDetailUrl',
+  'function getAthomeCanonicalListingId',
+  'function getAthomeLookupStorageIds',
+  'function getAthomeNextPageUrl',
   'function getCandidateListingIds',
   'function getMaybeLinkListingIds',
   'function getDuplicateLinkedListingIdsOnPage',
@@ -171,6 +178,10 @@ function checkRequiredPatterns() {
   if (!css.includes('table.cassetteitem_other > tbody.hc-filtered-out')) {
     throw new Error('Required SUUMO filtered selector is missing from content.css');
   }
+
+  if (!css.includes('.p-property__room--detailbox.hc-filtered-out')) {
+    throw new Error('Required athome filtered selector is missing from content.css');
+  }
 }
 
 function checkExportFilenameConvention() {
@@ -204,22 +215,31 @@ function checkManifestSupport() {
 
   const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
   const expectedMatch = 'https://suumo.jp/jj/chintai/ichiran/FR301FC001/*';
+  const athomeMatch = 'https://www.athome.co.jp/chintai/tokyo/list/*';
 
   if (manifest.name !== '賃貸物件 条件一覧アシスタント') {
     throw new Error('Manifest name was not updated to the generic assistant name.');
   }
 
-  if (!manifest.description.includes('HOME\'S / SUUMO')) {
-    throw new Error('Manifest description does not mention HOME\'S / SUUMO support.');
+  if (!manifest.description.includes('HOME\'S / SUUMO / athome')) {
+    throw new Error('Manifest description does not mention HOME\'S / SUUMO / athome support.');
   }
 
   if (!manifest.host_permissions.includes(expectedMatch)) {
     throw new Error('Manifest host permissions do not include the SUUMO list URL.');
   }
 
+  if (!manifest.host_permissions.includes(athomeMatch)) {
+    throw new Error('Manifest host permissions do not include the athome list URL.');
+  }
+
   const matches = manifest.content_scripts.flatMap(script => script.matches || []);
   if (!matches.includes(expectedMatch)) {
     throw new Error('Content script matches do not include the SUUMO list URL.');
+  }
+
+  if (!matches.includes(athomeMatch)) {
+    throw new Error('Content script matches do not include the athome list URL.');
   }
 }
 
@@ -229,6 +249,8 @@ function checkSampleFixtures() {
   const homesCondition1 = compactHtml(fs.readFileSync(homesCondition1SamplePath, 'utf8'));
   const homesConditionList = compactHtml(fs.readFileSync(homesConditionListSamplePath, 'utf8'));
   const suumo = compactHtml(fs.readFileSync(suumoSamplePath, 'utf8'));
+  const athome = compactHtml(fs.readFileSync(athomeBundleSamplePath, 'utf8'));
+  const athomePager = compactHtml(fs.readFileSync(athomePagerSamplePath, 'utf8'));
 
   if (!homesCondition1.includes('class="bukkenName prg-detailLinkTrigger">アサノ荘</span>')) {
     throw new Error('HOME\'S condition1 sample is missing the property name selector used for linking.');
@@ -261,17 +283,41 @@ function checkSampleFixtures() {
   if (!suumo.includes('class="cassetteitem_price cassetteitem_price--rent"><span class="cassetteitem_other-emphasis ui-text--bold">5.5万円</span>')) {
     throw new Error('SUUMO sample is missing the rent selector used for linking.');
   }
+
+  if (!athome.includes('class="p-property__title--building">ハイタウン大森第２ 10階建</h2>')) {
+    throw new Error('athome sample is missing the property name selector used for linking.');
+  }
+
+  if (!athome.includes('<dd><strong>大田区大森北３丁目</strong></dd>')) {
+    throw new Error('athome sample is missing the address selector used for linking.');
+  }
+
+  if (!athome.includes('class="p-property__information-rent">6.2</b>万円')) {
+    throw new Error('athome sample is missing the rent selector used for linking.');
+  }
+
+  if (!athome.includes('class="p-property__room-more-inner"')) {
+    throw new Error('athome sample is missing the detail URL selector used for linking.');
+  }
+
+  if (!athomePager.includes("class=\"c-paging__pagenavi-item\" onclick=\"javascript:pushGapCustomForPagingPost('2');\">2</a>")) {
+    throw new Error('athome page selector sample is missing the page 2 link.');
+  }
+
+  if (!athomePager.includes("class=\"c-paging__pagenavi-item\" onclick=\"javascript:pushGapCustomForPagingPost('next');\">&gt;</a>")) {
+    throw new Error('athome page selector sample is missing the next page link.');
+  }
 }
 
 function checkStorageDocVersion() {
   console.log('Checking storage documentation version...');
 
-  const latestDocPath = path.join(docsPath, 'storage_sync_v1.11.md');
+  const latestDocPath = path.join(docsPath, 'storage_sync_v1.12.md');
   if (!fs.existsSync(latestDocPath)) {
-    throw new Error('Latest storage sync doc must be versioned as docs/storage_sync_v1.11.md.');
+    throw new Error('Latest storage sync doc must be versioned as docs/storage_sync_v1.12.md.');
   }
 
-  if (fs.existsSync(path.join(docsPath, 'storage_sync_v1.10.md'))) {
+  if (fs.existsSync(path.join(docsPath, 'storage_sync_v1.11.md'))) {
     throw new Error('Older latest storage sync doc should have been removed after version bump.');
   }
 }

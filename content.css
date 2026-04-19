@@ -625,7 +625,8 @@ body.hc-modal-open {
 
 .mod-newArrivalBuilding,
 tr.prg-roomRow,
-table.cassetteitem_other > tbody {
+table.cassetteitem_other > tbody,
+.p-property__room--detailbox {
   transition: opacity .18s ease, transform .18s ease, box-shadow .18s ease;
 }
 
@@ -634,7 +635,16 @@ table.cassetteitem_other > tbody {
   background: #fff5f5;
 }
 
+.p-property__room--detailbox.hc-color-red {
+  box-shadow: inset 6px 0 0 #ef4444;
+  background: #fff5f5;
+}
+
 tr.prg-roomRow.hc-color-red > td {
+  background: #fff5f5;
+}
+
+.p-property__room--detailbox.hc-color-red .p-property__room--detail-information {
   background: #fff5f5;
 }
 
@@ -651,7 +661,16 @@ table.cassetteitem_other > tbody.hc-color-red > tr:first-child > td:first-child 
   background: #fffaf0;
 }
 
+.p-property__room--detailbox.hc-color-orange {
+  box-shadow: inset 6px 0 0 #f59e0b;
+  background: #fffaf0;
+}
+
 tr.prg-roomRow.hc-color-orange > td {
+  background: #fffaf0;
+}
+
+.p-property__room--detailbox.hc-color-orange .p-property__room--detail-information {
   background: #fffaf0;
 }
 
@@ -668,7 +687,16 @@ table.cassetteitem_other > tbody.hc-color-orange > tr:first-child > td:first-chi
   background: #f0fdf4;
 }
 
+.p-property__room--detailbox.hc-color-green {
+  box-shadow: inset 6px 0 0 #10b981;
+  background: #f0fdf4;
+}
+
 tr.prg-roomRow.hc-color-green > td {
+  background: #f0fdf4;
+}
+
+.p-property__room--detailbox.hc-color-green .p-property__room--detail-information {
   background: #f0fdf4;
 }
 
@@ -685,7 +713,16 @@ table.cassetteitem_other > tbody.hc-color-green > tr:first-child > td:first-chil
   background: #eff6ff;
 }
 
+.p-property__room--detailbox.hc-color-blue {
+  box-shadow: inset 6px 0 0 #3b82f6;
+  background: #eff6ff;
+}
+
 tr.prg-roomRow.hc-color-blue > td {
+  background: #eff6ff;
+}
+
+.p-property__room--detailbox.hc-color-blue .p-property__room--detail-information {
   background: #eff6ff;
 }
 
@@ -702,7 +739,16 @@ table.cassetteitem_other > tbody.hc-color-blue > tr:first-child > td:first-child
   background: #d1d5db;
 }
 
+.p-property__room--detailbox.hc-color-gray {
+  box-shadow: inset 6px 0 0 #374151;
+  background: #d1d5db;
+}
+
 tr.prg-roomRow.hc-color-gray > td {
+  background: #d1d5db;
+}
+
+.p-property__room--detailbox.hc-color-gray .p-property__room--detail-information {
   background: #d1d5db;
 }
 
@@ -715,6 +761,10 @@ table.cassetteitem_other > tbody.hc-color-gray > tr:first-child > td:first-child
 }
 
 .mod-newArrivalBuilding.hc-filtered-out {
+  display: none !important;
+}
+
+.p-property__room--detailbox.hc-filtered-out {
   display: none !important;
 }
 
