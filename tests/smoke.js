@@ -35,6 +35,7 @@ const requiredPatterns = [
   'function getDuplicateLinkedListingIdsOnPage',
   'function findListingIdByDetailUrl',
   'function getDetailUrlSuggestions',
+  'function renderLinkMetadataBadges',
   'async function applySelectedLinkIds',
   'async function applyRowLinkAction',
   'async function applyDetailUrlLink',
@@ -45,6 +46,8 @@ const requiredPatterns = [
   'linkGroups: getExportableLinkGroups()',
   '紐づけ一覧',
   'class="hc-link-name"',
+  'class="hc-link-state',
+  'class="hc-link-comment-preview"',
   'class="hc-link-url-input"',
   'data-hc-link-suggestions',
   'data-hc-suggest-url',
@@ -115,6 +118,14 @@ function checkRequiredPatterns() {
 
   if (!css.includes('.hc-link-summary')) {
     throw new Error('Required compact link summary selector is missing from content.css');
+  }
+
+  if (!css.includes('.hc-link-state')) {
+    throw new Error('Required link state badge selector is missing from content.css');
+  }
+
+  if (!css.includes('.hc-link-comment-preview')) {
+    throw new Error('Required link comment preview selector is missing from content.css');
   }
 
   if (!css.includes('.hc-link-url-input')) {

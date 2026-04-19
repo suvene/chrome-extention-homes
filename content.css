@@ -343,7 +343,8 @@
 }
 
 .hc-link-status,
-.hc-link-site {
+.hc-link-site,
+.hc-link-state {
   display: inline-flex;
   align-items: center;
   padding: 2px 8px;
@@ -360,6 +361,47 @@
 .hc-link-site {
   background: #e2e8f0;
   color: #334155;
+}
+
+.hc-link-state {
+  background: #e5e7eb;
+  color: #374151;
+}
+
+.hc-link-state-red {
+  background: #fecaca;
+  color: #991b1b;
+}
+
+.hc-link-state-orange {
+  background: #fed7aa;
+  color: #9a3412;
+}
+
+.hc-link-state-green {
+  background: #bbf7d0;
+  color: #166534;
+}
+
+.hc-link-state-blue {
+  background: #bfdbfe;
+  color: #1d4ed8;
+}
+
+.hc-link-state-gray {
+  background: #9ca3af;
+  color: #111827;
+}
+
+.hc-link-comment-preview {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  max-width: min(32ch, 100%);
+  padding: 2px 0;
+  font-size: 11px;
+  color: #475569;
+  white-space: nowrap;
 }
 
 .hc-link-summary {
