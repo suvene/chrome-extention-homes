@@ -1606,6 +1606,27 @@
     };
   }
 
+  function renderLinkMetadataBadges(listingId, record = {}, options = {}) {
+    const siteLabel = getSiteLabel(record.site);
+    const resolvedState = getResolvedStateByListingId(listingId).state;
+    const stateOption = getStatusOption(resolvedState.color);
+    const stateClassName = stateOption.colorClass ? ` hc-link-state-${stateOption.colorClass}` : '';
+    const commentPreview = truncateCommentPreview(resolvedState.comment, 40);
+    const commentMarkup = commentPreview
+      ? `<span class="hc-link-comment-preview" title="${escapeHtml(normalizeText(resolvedState.comment))}">${escapeHtml(commentPreview)}</span>`
+      : '';
+    const leadingBadges = Array.isArray(options.leadingBadges) ? options.leadingBadges : [];
+
+    return `
+      <span class="hc-link-badges">
+        ${leadingBadges.join('')}
+        <span class="hc-link-site">${escapeHtml(siteLabel)}</span>
+        <span class="hc-link-state${stateClassName}">${escapeHtml(stateOption.badgeLabel)}</span>
+        ${commentMarkup}
+      </span>
+    `;
+  }
+
   function renderLinkListMarkup(card) {
     const { rows } = buildLinkListRows(card);
 
@@ -1615,18 +1636,13 @@
 
     return rows.map(row => {
       const record = row.record || {};
-      const siteLabel = getSiteLabel(record.site);
       const name = record.name || '物件名不明';
       const address = record.address || '住所不明';
       const rent = record.rent || '家賃不明';
       const detailUrl = record.detailUrl || '';
-      const resolvedState = getResolvedStateByListingId(row.listingId).state;
-      const stateOption = getStatusOption(resolvedState.color);
-      const stateClassName = stateOption.colorClass ? ` hc-link-state-${stateOption.colorClass}` : '';
-      const commentPreview = truncateCommentPreview(resolvedState.comment, 40);
-      const commentMarkup = commentPreview
-        ? `<span class="hc-link-comment-preview" title="${escapeHtml(normalizeText(resolvedState.comment))}">${escapeHtml(commentPreview)}</span>`
-        : '';
+      const badgesMarkup = renderLinkMetadataBadges(row.listingId, record, {
+        leadingBadges: [`<span class="hc-link-status">${escapeHtml(row.status)}</span>`]
+      });
       const nameMarkup = detailUrl
         ? `<a href="${escapeHtml(detailUrl)}" target="_blank" rel="noopener" class="hc-link-name">${escapeHtml(name)}</a>`
         : `<span class="hc-link-name is-static">${escapeHtml(name)}</span>`;
@@ -1634,12 +1650,7 @@
       return `
         <div class="hc-link-item ${row.actionValue === 'unlink' ? 'is-linked' : 'is-candidate'}">
           <span class="hc-link-meta">
-            <span class="hc-link-badges">
-              <span class="hc-link-status">${escapeHtml(row.status)}</span>
-              <span class="hc-link-site">${escapeHtml(siteLabel)}</span>
-              <span class="hc-link-state${stateClassName}">${escapeHtml(stateOption.badgeLabel)}</span>
-              ${commentMarkup}
-            </span>
+            ${badgesMarkup}
             <span class="hc-link-summary">
               ${nameMarkup}
               <span class="hc-link-rent">${escapeHtml(rent)}</span>
@@ -1672,11 +1683,11 @@
 
     return suggestions.map(suggestion => {
       const record = suggestion.record || {};
-      const siteLabel = getSiteLabel(record.site);
       const name = record.name || '物件名不明';
       const address = record.address || '住所不明';
       const rent = record.rent || '家賃不明';
       const detailUrl = record.detailUrl || '';
+      const badgesMarkup = renderLinkMetadataBadges(suggestion.listingId, record);
 
       return `
         <button
@@ -1686,8 +1697,8 @@
         >
           <span class="hc-link-suggestion-top">
             <span class="hc-link-suggestion-name">${escapeHtml(name)}</span>
-            <span class="hc-link-site">${escapeHtml(siteLabel)}</span>
           </span>
+          ${badgesMarkup}
           <span class="hc-link-suggestion-meta">
             <span class="hc-link-rent">${escapeHtml(rent)}</span>
             <span class="hc-link-address">${escapeHtml(address)}</span>

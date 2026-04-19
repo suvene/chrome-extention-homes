@@ -35,6 +35,7 @@ const requiredPatterns = [
   'function getDuplicateLinkedListingIdsOnPage',
   'function findListingIdByDetailUrl',
   'function getDetailUrlSuggestions',
+  'function renderLinkMetadataBadges',
   'async function applySelectedLinkIds',
   'async function applyRowLinkAction',
   'async function applyDetailUrlLink',
