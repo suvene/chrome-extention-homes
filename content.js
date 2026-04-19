@@ -206,6 +206,12 @@
     return normalized.toLowerCase();
   }
 
+  function normalizeAddressPrefixToFirstNumber(value) {
+    const normalized = normalizeAddressText(value).replace(/[０-９]/g, digit => String.fromCharCode(digit.charCodeAt(0) - 0xFEE0));
+    const match = normalized.match(/^.*?\d+/);
+    return match?.[0] || '';
+  }
+
   function normalizeRentText(value) {
     const normalized = normalizeText(value).replace(/,/g, '');
     const match = normalized.match(/(\d+(?:\.\d+)?)/);
@@ -840,6 +846,40 @@
     }
 
     return unique(candidateIds);
+  }
+
+  function getMaybeLinkListingIds(listingId) {
+    const currentRecord = listingRegistry[listingId];
+    if (!currentRecord) return [];
+
+    const linkedIds = getLinkedListingIds(listingId).filter(candidateId => candidateId !== listingId);
+    const excludedIds = new Set([listingId, ...linkedIds, ...getCandidateListingIds(listingId)]);
+    const knownNameAddressPairs = unique(
+      [currentRecord, ...linkedIds.map(candidateId => listingRegistry[candidateId]).filter(Boolean)]
+        .map(record => {
+          const normalizedName = normalizePropertyName(record?.name);
+          const addressPrefix = normalizeAddressPrefixToFirstNumber(record?.address);
+          return normalizedName && addressPrefix ? `${normalizedName}|${addressPrefix}` : '';
+        })
+        .filter(Boolean)
+    );
+
+    if (knownNameAddressPairs.length === 0) {
+      return [];
+    }
+
+    return Object.entries(listingRegistry)
+      .filter(([candidateId, record]) => {
+        if (excludedIds.has(candidateId)) return false;
+
+        const normalizedName = normalizePropertyName(record?.name);
+        const addressPrefix = normalizeAddressPrefixToFirstNumber(record?.address);
+        const candidateKey = normalizedName && addressPrefix ? `${normalizedName}|${addressPrefix}` : '';
+
+        return candidateKey ? knownNameAddressPairs.includes(candidateKey) : false;
+      })
+      .sort((left, right) => (right[1]?.lastSeenAt || 0) - (left[1]?.lastSeenAt || 0))
+      .map(([candidateId]) => candidateId);
   }
 
   function findListingIdByDetailUrl(detailUrl, currentListingId = '') {
@@ -1606,6 +1646,16 @@
     };
   }
 
+  function buildMaybeLinkRows(card) {
+    return getMaybeLinkListingIds(getCardIdentity(card).listingId).map(listingId => ({
+      listingId,
+      record: listingRegistry[listingId],
+      status: 'もしかして',
+      actionLabel: 'リンク',
+      actionValue: 'link'
+    }));
+  }
+
   function renderLinkMetadataBadges(listingId, record = {}, options = {}) {
     const siteLabel = getSiteLabel(record.site);
     const resolvedState = getResolvedStateByListingId(listingId).state;
@@ -1629,11 +1679,9 @@
     `;
   }
 
-  function renderLinkListMarkup(card) {
-    const { rows } = buildLinkListRows(card);
-
+  function renderLinkRowsMarkup(rows, emptyText = '候補はまだありません。') {
     if (rows.length === 0) {
-      return '<p class="hc-link-empty">候補はまだありません。</p>';
+      return `<p class="hc-link-empty">${escapeHtml(emptyText)}</p>`;
     }
 
     return rows.map(row => {
@@ -1672,6 +1720,15 @@
         </div>
       `;
     }).join('');
+  }
+
+  function renderLinkListMarkup(card) {
+    const { rows } = buildLinkListRows(card);
+    return renderLinkRowsMarkup(rows);
+  }
+
+  function renderMaybeLinkListMarkup(card) {
+    return renderLinkRowsMarkup(buildMaybeLinkRows(card), '候補はまだありません。');
   }
 
   function renderDetailUrlSuggestionsMarkup(card, rawQuery) {
@@ -1733,6 +1790,7 @@
     const linkCount = buildLinkListRows(card).linkedCount;
     const linkCountElement = panel.querySelector('[data-hc-link-count]');
     const linkListElement = panel.querySelector('[data-hc-link-list]');
+    const maybeListElement = panel.querySelector('[data-hc-maybe-list]');
 
     if (linkCountElement) {
       linkCountElement.textContent = `紐づき ${linkCount}件`;
@@ -1740,6 +1798,10 @@
 
     if (linkListElement) {
       linkListElement.innerHTML = renderLinkListMarkup(card);
+    }
+
+    if (maybeListElement) {
+      maybeListElement.innerHTML = renderMaybeLinkListMarkup(card);
     }
   }
 
@@ -1907,6 +1969,10 @@
       <div class="hc-panel-row hc-panel-row-links-list">
         <div class="hc-link-list-heading">紐づけ一覧</div>
         <div class="hc-link-list" data-hc-link-list></div>
+        <div class="hc-link-subsection">
+          <div class="hc-link-list-heading">もしかして</div>
+          <div class="hc-link-list" data-hc-maybe-list></div>
+        </div>
       </div>
     `;
 
