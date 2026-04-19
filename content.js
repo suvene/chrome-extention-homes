@@ -917,6 +917,14 @@
     return getBestResolvedState(candidateIds, identity.title);
   }
 
+  function getResolvedStateByListingId(listingId) {
+    const record = listingRegistry[listingId] || {};
+    const linkedIds = getLinkedListingIds(listingId);
+    const candidateIds = unique([...linkedIds, listingId]);
+
+    return getBestResolvedState(candidateIds, record.name || '物件名不明');
+  }
+
   async function writeStateForListingIds(listingIds, rawState, defaultTitle = '物件名不明') {
     const normalizedIds = unique(listingIds);
     if (normalizedIds.length === 0) return;
@@ -1600,6 +1608,8 @@
       const address = record.address || '住所不明';
       const rent = record.rent || '家賃不明';
       const detailUrl = record.detailUrl || '';
+      const stateOption = getStatusOption(getResolvedStateByListingId(row.listingId).state.color);
+      const stateClassName = stateOption.colorClass ? ` hc-link-state-${stateOption.colorClass}` : '';
       const nameMarkup = detailUrl
         ? `<a href="${escapeHtml(detailUrl)}" target="_blank" rel="noopener" class="hc-link-name">${escapeHtml(name)}</a>`
         : `<span class="hc-link-name is-static">${escapeHtml(name)}</span>`;
@@ -1610,6 +1620,7 @@
             <span class="hc-link-badges">
               <span class="hc-link-status">${escapeHtml(row.status)}</span>
               <span class="hc-link-site">${escapeHtml(siteLabel)}</span>
+              <span class="hc-link-state${stateClassName}">${escapeHtml(stateOption.badgeLabel)}</span>
             </span>
             <span class="hc-link-summary">
               ${nameMarkup}

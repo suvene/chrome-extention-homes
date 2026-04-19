@@ -45,6 +45,7 @@ const requiredPatterns = [
   'linkGroups: getExportableLinkGroups()',
   '紐づけ一覧',
   'class="hc-link-name"',
+  'class="hc-link-state',
   'class="hc-link-url-input"',
   'data-hc-link-suggestions',
   'data-hc-suggest-url',
@@ -115,6 +116,10 @@ function checkRequiredPatterns() {
 
   if (!css.includes('.hc-link-summary')) {
     throw new Error('Required compact link summary selector is missing from content.css');
+  }
+
+  if (!css.includes('.hc-link-state')) {
+    throw new Error('Required link state badge selector is missing from content.css');
   }
 
   if (!css.includes('.hc-link-url-input')) {
