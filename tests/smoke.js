@@ -38,6 +38,7 @@ const requiredPatterns = [
   'function findListingIdByDetailUrl',
   'function getDetailUrlSuggestions',
   'function renderLinkMetadataBadges',
+  'function saveItemComment',
   'async function applySelectedLinkIds',
   'async function applyRowLinkAction',
   'async function applyDetailUrlLink',
@@ -50,6 +51,9 @@ const requiredPatterns = [
   'class="hc-link-name"',
   'class="hc-link-state',
   'class="hc-link-comment-preview"',
+  'data-hc-item-comment-label',
+  'data-hc-edit-item-comment',
+  'data-hc-item-comment-input',
   'class="hc-link-url-input"',
   'data-hc-link-suggestions',
   'data-hc-suggest-url',
@@ -134,6 +138,18 @@ function checkRequiredPatterns() {
 
   if (!css.includes('.hc-link-comment-preview')) {
     throw new Error('Required link comment preview selector is missing from content.css');
+  }
+
+  if (!css.includes('.hc-item-comment-label')) {
+    throw new Error('Required item comment label selector is missing from content.css');
+  }
+
+  if (!css.includes('.hc-item-comment-edit')) {
+    throw new Error('Required item comment edit selector is missing from content.css');
+  }
+
+  if (!css.includes('.hc-modal')) {
+    throw new Error('Required modal selector is missing from content.css');
   }
 
   if (!css.includes('.hc-link-url-input')) {
@@ -250,12 +266,12 @@ function checkSampleFixtures() {
 function checkStorageDocVersion() {
   console.log('Checking storage documentation version...');
 
-  const latestDocPath = path.join(docsPath, 'storage_sync_v1.10.md');
+  const latestDocPath = path.join(docsPath, 'storage_sync_v1.11.md');
   if (!fs.existsSync(latestDocPath)) {
-    throw new Error('Latest storage sync doc must be versioned as docs/storage_sync_v1.10.md.');
+    throw new Error('Latest storage sync doc must be versioned as docs/storage_sync_v1.11.md.');
   }
 
-  if (fs.existsSync(path.join(docsPath, 'storage_sync_v1.9.md'))) {
+  if (fs.existsSync(path.join(docsPath, 'storage_sync_v1.10.md'))) {
     throw new Error('Older latest storage sync doc should have been removed after version bump.');
   }
 }
