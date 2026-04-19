@@ -176,6 +176,18 @@
     return normalizeSpaces(value.normalize('NFKC'));
   }
 
+  function truncateCommentPreview(value, maxLength = 25) {
+    const normalized = normalizeText(value);
+    if (!normalized) return '';
+
+    const chars = Array.from(normalized);
+    if (chars.length <= maxLength) {
+      return normalized;
+    }
+
+    return `${chars.slice(0, maxLength).join('')}……`;
+  }
+
   function normalizePropertyName(value) {
     return normalizeText(value).toLowerCase();
   }
@@ -1608,8 +1620,13 @@
       const address = record.address || '住所不明';
       const rent = record.rent || '家賃不明';
       const detailUrl = record.detailUrl || '';
-      const stateOption = getStatusOption(getResolvedStateByListingId(row.listingId).state.color);
+      const resolvedState = getResolvedStateByListingId(row.listingId).state;
+      const stateOption = getStatusOption(resolvedState.color);
       const stateClassName = stateOption.colorClass ? ` hc-link-state-${stateOption.colorClass}` : '';
+      const commentPreview = truncateCommentPreview(resolvedState.comment, 25);
+      const commentMarkup = commentPreview
+        ? `<span class="hc-link-comment-preview" title="${escapeHtml(normalizeText(resolvedState.comment))}">${escapeHtml(commentPreview)}</span>`
+        : '';
       const nameMarkup = detailUrl
         ? `<a href="${escapeHtml(detailUrl)}" target="_blank" rel="noopener" class="hc-link-name">${escapeHtml(name)}</a>`
         : `<span class="hc-link-name is-static">${escapeHtml(name)}</span>`;
@@ -1621,6 +1638,7 @@
               <span class="hc-link-status">${escapeHtml(row.status)}</span>
               <span class="hc-link-site">${escapeHtml(siteLabel)}</span>
               <span class="hc-link-state${stateClassName}">${escapeHtml(stateOption.badgeLabel)}</span>
+              ${commentMarkup}
             </span>
             <span class="hc-link-summary">
               ${nameMarkup}
