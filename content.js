@@ -1979,6 +1979,7 @@
     const colorSelect = panel.querySelector('.hc-color-select');
     const commentArea = panel.querySelector('.hc-comment');
     const linkList = panel.querySelector('[data-hc-link-list]');
+    const maybeList = panel.querySelector('[data-hc-maybe-list]');
     const detailUrlInput = panel.querySelector('.hc-link-url-input');
     const detailUrlButton = panel.querySelector('.hc-link-url-button');
     const detailUrlSuggestions = panel.querySelector('[data-hc-link-suggestions]');
@@ -2021,7 +2022,7 @@
       await flushScheduledPersist(identity.listingId, identity.title);
     });
 
-    linkList.addEventListener('click', async event => {
+    const handleLinkActionClick = async event => {
       const actionButton = event.target.closest('[data-hc-link-action]');
       if (!actionButton) return;
 
@@ -2030,7 +2031,10 @@
         actionButton.getAttribute('data-hc-link-id') || '',
         actionButton.getAttribute('data-hc-link-action') || ''
       );
-    });
+    };
+
+    linkList.addEventListener('click', handleLinkActionClick);
+    maybeList?.addEventListener('click', handleLinkActionClick);
 
     detailUrlButton.addEventListener('click', async () => {
       await applyDetailUrlLink(card, detailUrlInput);
