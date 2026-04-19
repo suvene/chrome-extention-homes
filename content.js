@@ -1424,6 +1424,13 @@
 
   function applyState(card, state) {
     const decoratedElements = getDecoratedElements(card);
+    const statusColorClasses = [
+      'hc-status-badge-red',
+      'hc-status-badge-orange',
+      'hc-status-badge-green',
+      'hc-status-badge-blue',
+      'hc-status-badge-gray'
+    ];
 
     decoratedElements.forEach(element => {
       element.classList.remove(
@@ -1445,6 +1452,10 @@
     const badge = currentSite.getPanel(card)?.querySelector('.hc-status-badge');
     if (badge) {
       badge.textContent = option.badgeLabel;
+      badge.classList.remove(...statusColorClasses);
+      if (option.colorClass) {
+        badge.classList.add(`hc-status-badge-${option.colorClass}`);
+      }
     }
   }
 
