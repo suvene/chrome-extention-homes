@@ -151,6 +151,31 @@
   color: #374151;
 }
 
+.hc-status-badge-red {
+  background: #fecaca;
+  color: #991b1b;
+}
+
+.hc-status-badge-orange {
+  background: #fed7aa;
+  color: #9a3412;
+}
+
+.hc-status-badge-green {
+  background: #bbf7d0;
+  color: #166534;
+}
+
+.hc-status-badge-blue {
+  background: #bfdbfe;
+  color: #1d4ed8;
+}
+
+.hc-status-badge-gray {
+  background: #9ca3af;
+  color: #111827;
+}
+
 .hc-link-toolbar {
   display: flex;
   gap: 8px 12px;
@@ -474,20 +499,20 @@ table.cassetteitem_other > tbody.hc-color-blue > tr:first-child > td:first-child
 }
 
 .mod-newArrivalBuilding.hc-color-gray {
-  box-shadow: inset 6px 0 0 #6b7280;
-  background: #f3f4f6;
+  box-shadow: inset 6px 0 0 #374151;
+  background: #d1d5db;
 }
 
 tr.prg-roomRow.hc-color-gray > td {
-  background: #f3f4f6;
+  background: #d1d5db;
 }
 
 table.cassetteitem_other > tbody.hc-color-gray > tr > td {
-  background: #f3f4f6;
+  background: #d1d5db;
 }
 
 table.cassetteitem_other > tbody.hc-color-gray > tr:first-child > td:first-child {
-  box-shadow: inset 6px 0 0 #6b7280;
+  box-shadow: inset 6px 0 0 #374151;
 }
 
 .mod-newArrivalBuilding.hc-filtered-out {
