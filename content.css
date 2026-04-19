@@ -205,6 +205,16 @@
   gap: 8px;
 }
 
+.hc-link-suggestions {
+  display: grid;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.hc-link-suggestions.is-empty {
+  display: none;
+}
+
 .hc-link-list-heading {
   margin-bottom: 8px;
   font-size: 12px;
@@ -256,6 +266,49 @@
 .hc-link-item.is-candidate .hc-link-row-button {
   border-color: #93c5fd;
   color: #1d4ed8;
+}
+
+.hc-link-suggestion-item {
+  display: grid;
+  gap: 4px;
+  width: 100%;
+  padding: 8px 10px;
+  text-align: left;
+  border: 1px solid #dbe4f0;
+  border-radius: 8px;
+  background: #fff;
+  cursor: pointer;
+}
+
+.hc-link-suggestion-item:hover {
+  background: #f8fbff;
+  border-color: #93c5fd;
+}
+
+.hc-link-suggestion-top,
+.hc-link-suggestion-meta {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.hc-link-suggestion-name {
+  font-size: 12px;
+  font-weight: 700;
+  color: #1f2937;
+}
+
+.hc-link-suggestion-url {
+  font-size: 11px;
+  color: #64748b;
+  word-break: break-all;
+}
+
+.hc-link-suggestion-empty {
+  margin: 0;
+  font-size: 12px;
+  color: #64748b;
 }
 
 .hc-link-badges {
