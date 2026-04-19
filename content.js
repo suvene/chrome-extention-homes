@@ -230,7 +230,7 @@
 
   function normalizeMaybeLinkAddressPrefix(record) {
     const rawAddress = typeof record?.address === 'string' ? record.address : '';
-    if (record?.site === 'athome-tokyo-list' && rawAddress.startsWith('東京')) {
+    if (record?.site === 'athome-tokyo-list' && rawAddress && !rawAddress.startsWith('東京都')) {
       return normalizeAddressPrefixToFirstNumber(`東京都${rawAddress}`);
     }
 
