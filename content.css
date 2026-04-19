@@ -108,6 +108,8 @@
   border-radius: 8px;
   width: 100%;
   box-sizing: border-box;
+  position: relative;
+  z-index: 2;
 }
 
 .hc-panel-row {

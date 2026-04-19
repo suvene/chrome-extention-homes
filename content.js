@@ -2389,7 +2389,21 @@
       openItemCommentModal(editButton.getAttribute('data-hc-edit-item-comment') || '');
     });
 
+    if (currentSite.id === 'athome-tokyo-list') {
+      installAthomePanelInteractionGuards(panel);
+    }
+
     return panel;
+  }
+
+  function installAthomePanelInteractionGuards(panel) {
+    const stopPanelEvent = event => {
+      event.stopPropagation();
+    };
+
+    ['mousedown', 'mouseup', 'click', 'dblclick'].forEach(eventName => {
+      panel.addEventListener(eventName, stopPanelEvent);
+    });
   }
 
   function mountHomesCondition1Panel(card, panel) {
