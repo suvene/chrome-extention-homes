@@ -1,18 +1,20 @@
 {
   "manifest_version": 3,
-  "name": "HOME'S 条件一覧アシスト",
+  "name": "賃貸物件 条件一覧アシスタント",
   "version": "0.2.0",
-  "description": "HOME'Sの条件一覧にコメント・色分け・非表示機能を追加",
+  "description": "HOME'S / SUUMO の条件一覧にコメント・色分け・非表示機能を追加",
   "permissions": ["storage"],
   "host_permissions": [
     "https://www.homes.co.jp/search/condition-list/*",
-    "https://www.homes.co.jp/search/condition1/*"
+    "https://www.homes.co.jp/search/condition1/*",
+    "https://suumo.jp/jj/chintai/ichiran/FR301FC001/*"
   ],
   "content_scripts": [
     {
       "matches": [
         "https://www.homes.co.jp/search/condition-list/*",
-        "https://www.homes.co.jp/search/condition1/*"
+        "https://www.homes.co.jp/search/condition1/*",
+        "https://suumo.jp/jj/chintai/ichiran/FR301FC001/*"
       ],
       "js": ["content.js"],
       "css": ["content.css"],
