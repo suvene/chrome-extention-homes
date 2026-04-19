@@ -24,6 +24,7 @@ const requiredPatterns = [
   "id: 'suumo-fr301fc001'",
   'function buildListingFingerprint',
   'function normalizeAddressText',
+  'function normalizeAddressPrefixToFirstNumber',
   'function normalizeRentText',
   'function normalizeDetailUrl',
   'function getLocalFilterStorageKey',
@@ -32,6 +33,7 @@ const requiredPatterns = [
   'function getHomesDetailUrl',
   'function getSuumoDetailUrl',
   'function getCandidateListingIds',
+  'function getMaybeLinkListingIds',
   'function getDuplicateLinkedListingIdsOnPage',
   'function findListingIdByDetailUrl',
   'function getDetailUrlSuggestions',
@@ -53,6 +55,8 @@ const requiredPatterns = [
   'data-hc-suggest-url',
   'data-hc-link-action',
   'URLでリンク',
+  'もしかして',
+  'data-hc-maybe-list',
   'data-hc-last-updated',
   'id="hc-export"',
   'id="hc-import"'
@@ -114,6 +118,10 @@ function checkRequiredPatterns() {
 
   if (!css.includes('.hc-link-item')) {
     throw new Error('Required link item selector is missing from content.css');
+  }
+
+  if (!css.includes('.hc-link-subsection')) {
+    throw new Error('Required maybe-link subsection selector is missing from content.css');
   }
 
   if (!css.includes('.hc-link-summary')) {
