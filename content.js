@@ -7,6 +7,7 @@
   const LOCAL_FILTER_STORAGE_KEY_PREFIX = 'homes_header_filter_v1';
   const LOCAL_MIGRATION_FLAG_KEY = 'homes_local_migration_v1';
   const COMMENT_SAVE_DEBOUNCE_MS = 700;
+  const ITEM_COMMENT_MAX_LENGTH = 80;
   const REGISTRY_PERSIST_DEBOUNCE_MS = 400;
   const EXPORT_FILENAME_PREFIX = 'rent-condition-notes';
   const APP_TITLE = '賃貸物件 条件一覧アシスタント';
@@ -185,7 +186,7 @@
       return normalized;
     }
 
-    return `${chars.slice(0, maxLength).join('')}……`;
+    return `${chars.slice(0, maxLength).join('')}…`;
   }
 
   function normalizePropertyName(value) {
@@ -544,6 +545,7 @@
     return {
       color: normalizeStatusValue(rawState?.color),
       comment: typeof rawState?.comment === 'string' ? rawState.comment : '',
+      itemComment: typeof rawState?.itemComment === 'string' ? rawState.itemComment : '',
       title: typeof rawState?.title === 'string' && rawState.title.trim()
         ? rawState.title
         : defaultTitle,
@@ -607,7 +609,7 @@
   }
 
   function isDefaultState(state) {
-    return state.color === '0' && !state.comment.trim();
+    return state.color === '0' && !state.comment.trim() && !state.itemComment.trim();
   }
 
   function statesEqual(left, right) {
@@ -615,8 +617,23 @@
 
     return left.color === right.color
       && left.comment === right.comment
+      && left.itemComment === right.itemComment
       && left.title === right.title
       && left.updatedAt === right.updatedAt;
+  }
+
+  function buildStateWithPreservedItemComment(rawState, currentState, defaultTitle = '物件名不明') {
+    const normalizedNext = normalizeState(rawState, defaultTitle);
+    const normalizedCurrent = normalizeState(currentState, defaultTitle);
+
+    return normalizeState({
+      ...normalizedNext,
+      itemComment: normalizedCurrent.itemComment
+    }, defaultTitle);
+  }
+
+  function getItemComment(listingId, defaultTitle = '物件名不明') {
+    return normalizeState(stateCache[listingId], defaultTitle).itemComment;
   }
 
   function pickNewerState(current, incoming) {
@@ -965,33 +982,51 @@
     const identity = getCardIdentity(card);
     const linkedIds = getLinkedListingIds(identity.listingId);
     const candidateIds = unique([...linkedIds, ...identity.lookupIds]);
+    const resolved = getBestResolvedState(candidateIds, identity.title);
 
-    return getBestResolvedState(candidateIds, identity.title);
+    return {
+      ...resolved,
+      state: normalizeState({
+        ...resolved.state,
+        itemComment: getItemComment(identity.listingId, identity.title)
+      }, identity.title)
+    };
   }
 
   function getResolvedStateByListingId(listingId) {
     const record = listingRegistry[listingId] || {};
     const linkedIds = getLinkedListingIds(listingId);
     const candidateIds = unique([...linkedIds, listingId]);
+    const defaultTitle = record.name || '物件名不明';
+    const resolved = getBestResolvedState(candidateIds, defaultTitle);
 
-    return getBestResolvedState(candidateIds, record.name || '物件名不明');
+    return {
+      ...resolved,
+      state: normalizeState({
+        ...resolved.state,
+        itemComment: getItemComment(listingId, defaultTitle)
+      }, defaultTitle)
+    };
   }
 
-  async function writeStateForListingIds(listingIds, rawState, defaultTitle = '物件名不明') {
+  async function writeStateForListingIds(listingIds, rawState, defaultTitle = '物件名不明', options = {}) {
     const normalizedIds = unique(listingIds);
     if (normalizedIds.length === 0) return;
 
     const state = normalizeState(rawState, defaultTitle);
+    const preserveItemComment = options.preserveItemComment === true;
 
-    if (isDefaultState(state)) {
-      normalizedIds.forEach(id => {
+    normalizedIds.forEach(id => {
+      const nextState = preserveItemComment
+        ? buildStateWithPreservedItemComment(state, stateCache[id], listingRegistry[id]?.name || defaultTitle)
+        : state;
+
+      if (isDefaultState(nextState)) {
         delete stateCache[id];
-      });
-    } else {
-      normalizedIds.forEach(id => {
-        stateCache[id] = state;
-      });
-    }
+      } else {
+        stateCache[id] = nextState;
+      }
+    });
 
     await persistStateCache();
   }
@@ -1003,7 +1038,7 @@
     const linkedIds = getLinkedListingIds(listingId);
     const targetIds = linkedIds.length > 0 ? linkedIds : [listingId];
 
-    await writeStateForListingIds(targetIds, state, defaultTitle);
+    await writeStateForListingIds(targetIds, state, defaultTitle, { preserveItemComment: true });
   }
 
   function schedulePersist(listingId) {
@@ -1652,29 +1687,44 @@
       record: listingRegistry[listingId],
       status: 'もしかして',
       actionLabel: 'リンク',
-      actionValue: 'link'
+      actionValue: 'link',
+      isMaybe: true
     }));
   }
 
   function renderLinkMetadataBadges(listingId, record = {}, options = {}) {
     const siteLabel = getSiteLabel(record.site);
-    const resolvedState = getResolvedStateByListingId(listingId).state;
+    const resolvedState = options.resolvedState || getResolvedStateByListingId(listingId).state;
     const stateOption = getStatusOption(resolvedState.color);
     const stateClassName = stateOption.colorClass ? ` hc-link-state-${stateOption.colorClass}` : '';
     const commentPreview = truncateCommentPreview(resolvedState.comment, 40);
+    const itemCommentPreview = truncateCommentPreview(resolvedState.itemComment, 10);
     const showState = options.showState !== false;
-    const showComment = options.showComment !== false;
+    const showCommentInBadges = options.showCommentInBadges !== false;
+    const showItemCommentInBadges = options.showItemCommentInBadges !== false;
     const commentMarkup = commentPreview
       ? `<span class="hc-link-comment-preview" title="${escapeHtml(normalizeText(resolvedState.comment))}">${escapeHtml(commentPreview)}</span>`
       : '';
+    const itemCommentMarkup = itemCommentPreview
+      ? `<span class="hc-item-comment-label" title="${escapeHtml(normalizeText(resolvedState.itemComment))}">${escapeHtml(itemCommentPreview)}</span>`
+      : '';
+    const showEditButton = options.showEditButton !== false;
     const leadingBadges = Array.isArray(options.leadingBadges) ? options.leadingBadges : [];
 
     return `
-      <span class="hc-link-badges">
-        ${leadingBadges.join('')}
-        <span class="hc-link-site">${escapeHtml(siteLabel)}</span>
-        ${showState ? `<span class="hc-link-state${stateClassName}">${escapeHtml(stateOption.badgeLabel)}</span>` : ''}
-        ${showComment ? commentMarkup : ''}
+      <span class="hc-link-badge-row">
+        <span class="hc-link-badges">
+          ${leadingBadges.join('')}
+          <span class="hc-link-site">${escapeHtml(siteLabel)}</span>
+          ${showState ? `<span class="hc-link-state${stateClassName}">${escapeHtml(stateOption.badgeLabel)}</span>` : ''}
+          ${showCommentInBadges ? commentMarkup : ''}
+        </span>
+        <span class="hc-item-comment-inline">
+          ${showEditButton ? `
+            <button type="button" class="hc-item-comment-edit" data-hc-edit-item-comment="${escapeHtml(listingId)}">編集</button>
+          ` : ''}
+          ${showItemCommentInBadges ? itemCommentMarkup : ''}
+        </span>
       </span>
     `;
   }
@@ -1686,15 +1736,23 @@
 
     return rows.map(row => {
       const record = row.record || {};
+      const resolvedState = getResolvedStateByListingId(row.listingId).state;
+      const commentPreview = truncateCommentPreview(resolvedState.comment, 40);
       const name = record.name || '物件名不明';
       const address = record.address || '住所不明';
       const rent = record.rent || '家賃不明';
       const detailUrl = record.detailUrl || '';
       const badgesMarkup = renderLinkMetadataBadges(row.listingId, record, {
+        resolvedState,
         leadingBadges: [`<span class="hc-link-status">${escapeHtml(row.status)}</span>`],
         showState: row.actionValue !== 'unlink',
-        showComment: row.actionValue !== 'unlink'
+        showCommentInBadges: false,
+        showItemCommentInBadges: row.isMaybe === true,
+        showEditButton: true
       });
+      const commentDetailMarkup = (row.actionValue === 'link' && commentPreview)
+        ? `<span class="hc-link-detail-comment" title="${escapeHtml(normalizeText(resolvedState.comment))}">${escapeHtml(commentPreview)}</span>`
+        : '';
       const nameMarkup = detailUrl
         ? `<a href="${escapeHtml(detailUrl)}" target="_blank" rel="noopener" class="hc-link-name">${escapeHtml(name)}</a>`
         : `<span class="hc-link-name is-static">${escapeHtml(name)}</span>`;
@@ -1708,6 +1766,7 @@
               <span class="hc-link-rent">${escapeHtml(rent)}</span>
               <span class="hc-link-address">${escapeHtml(address)}</span>
             </span>
+            ${commentDetailMarkup}
           </span>
           <button
             type="button"
@@ -1811,6 +1870,7 @@
 
     const colorSelect = panel.querySelector('.hc-color-select');
     const commentArea = panel.querySelector('.hc-comment');
+    const itemCommentLabel = panel.querySelector('[data-hc-item-comment-label]');
 
     if (colorSelect && colorSelect.value !== state.color) {
       colorSelect.value = state.color;
@@ -1818,6 +1878,13 @@
 
     if (commentArea && commentArea.value !== (state.comment || '')) {
       commentArea.value = state.comment || '';
+    }
+
+    if (itemCommentLabel) {
+      const itemComment = truncateCommentPreview(state.itemComment, 10);
+      itemCommentLabel.textContent = itemComment || '';
+      itemCommentLabel.title = itemComment ? normalizeText(state.itemComment) : '';
+      itemCommentLabel.classList.toggle('is-empty', !itemComment);
     }
 
     syncLinkPanel(card);
@@ -1930,6 +1997,122 @@
     await applySelectedLinkIds(card, selectedIds);
   }
 
+  function ensureItemCommentModal() {
+    let modal = document.querySelector('.hc-modal');
+    if (modal) return modal;
+
+    modal = document.createElement('div');
+    modal.className = 'hc-modal';
+    modal.dataset.open = '0';
+    modal.innerHTML = `
+      <div class="hc-modal-backdrop" data-hc-modal-close></div>
+      <div class="hc-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="hc-item-comment-modal-title">
+        <div class="hc-modal-header">
+          <strong id="hc-item-comment-modal-title">物件コメントを編集</strong>
+        </div>
+        <div class="hc-modal-body">
+          <input
+            type="text"
+            class="hc-modal-input"
+            data-hc-item-comment-input
+            maxlength="${ITEM_COMMENT_MAX_LENGTH}"
+            placeholder="1行コメントを入力"
+          >
+        </div>
+        <div class="hc-modal-actions">
+          <button type="button" class="hc-modal-button is-secondary" data-hc-modal-close>閉じる</button>
+          <button type="button" class="hc-modal-button is-primary" data-hc-item-comment-save>保存</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(modal);
+
+    modal.addEventListener('click', event => {
+      if (event.target.matches('[data-hc-modal-close]')) {
+        closeItemCommentModal();
+      }
+    });
+
+    modal.addEventListener('keydown', async event => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        closeItemCommentModal();
+        return;
+      }
+
+      if (event.key === 'Enter' && event.target.matches('[data-hc-item-comment-input]')) {
+        event.preventDefault();
+        await saveItemCommentFromModal();
+      }
+    });
+
+    modal.querySelector('[data-hc-item-comment-save]')?.addEventListener('click', async () => {
+      await saveItemCommentFromModal();
+    });
+
+    return modal;
+  }
+
+  function openItemCommentModal(listingId) {
+    if (!listingId) return;
+
+    const modal = ensureItemCommentModal();
+    const input = modal.querySelector('[data-hc-item-comment-input]');
+    const record = listingRegistry[listingId];
+
+    modal.dataset.listingId = listingId;
+    modal.dataset.open = '1';
+    document.body.classList.add('hc-modal-open');
+    input.value = getItemComment(listingId, record?.name || '物件名不明');
+    input.setAttribute('aria-label', `${record?.name || '物件'}のコメント`);
+    window.setTimeout(() => {
+      input.focus();
+      input.select();
+    }, 0);
+  }
+
+  function closeItemCommentModal() {
+    const modal = document.querySelector('.hc-modal');
+    if (!modal) return;
+
+    modal.dataset.open = '0';
+    modal.dataset.listingId = '';
+    document.body.classList.remove('hc-modal-open');
+  }
+
+  async function saveItemComment(listingId, rawValue) {
+    if (!listingId) return;
+
+    const defaultTitle = listingRegistry[listingId]?.name || '物件名不明';
+    const current = normalizeState(stateCache[listingId], defaultTitle);
+    const nextItemComment = normalizeText(rawValue).slice(0, ITEM_COMMENT_MAX_LENGTH);
+    const nextState = normalizeState({
+      ...current,
+      itemComment: nextItemComment,
+      title: defaultTitle,
+      updatedAt: Date.now()
+    }, defaultTitle);
+
+    if (isDefaultState(nextState)) {
+      delete stateCache[listingId];
+    } else {
+      stateCache[listingId] = nextState;
+    }
+
+    await persistStateCache();
+    refreshAllCards();
+  }
+
+  async function saveItemCommentFromModal() {
+    const modal = document.querySelector('.hc-modal');
+    if (!modal || modal.dataset.open !== '1') return;
+
+    const listingId = modal.dataset.listingId || '';
+    const input = modal.querySelector('[data-hc-item-comment-input]');
+    await saveItemComment(listingId, input?.value || '');
+    closeItemCommentModal();
+  }
+
   function createPanel(card, listingId, state) {
     const panel = document.createElement('div');
     panel.className = 'hc-panel';
@@ -1944,6 +2127,10 @@
         </label>
 
         <span class="hc-status-badge">0. 未検討</span>
+        <span class="hc-item-comment-inline">
+          <button type="button" class="hc-item-comment-edit" data-hc-edit-item-comment="${escapeHtml(listingId)}">編集</button>
+          <span class="hc-item-comment-label is-empty" data-hc-item-comment-label></span>
+        </span>
       </div>
 
       <div class="hc-panel-row">
@@ -2056,6 +2243,12 @@
 
       detailUrlInput.value = suggestionButton.getAttribute('data-hc-suggest-url') || '';
       await applyDetailUrlLink(card, detailUrlInput);
+    });
+
+    panel.addEventListener('click', event => {
+      const editButton = event.target.closest('[data-hc-edit-item-comment]');
+      if (!editButton) return;
+      openItemCommentModal(editButton.getAttribute('data-hc-edit-item-comment') || '');
     });
 
     return panel;

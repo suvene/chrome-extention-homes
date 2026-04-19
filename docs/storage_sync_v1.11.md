@@ -1,13 +1,13 @@
-# storage_sync_v1.10.md
+# storage_sync_v1.11.md
 
 ## 目的
-- HOME'S / SUUMO の一覧で付けたステータスとコメントを、同じブラウザ内の `chrome.storage.local` に保存する。
+- HOME'S / SUUMO の一覧で付けたステータス、紐づき共通コメント、掲載ごとの短い個別コメントを、同じブラウザ内の `chrome.storage.local` に保存する。
 - 読み込んだ掲載の台帳をローカルに保持し、物件名・住所・家賃の一致候補から紐づきを判断・再編集できるようにする。
 - JSON の書き出しと読み込みで、状態だけでなく掲載台帳と紐づき情報も救済できるようにする。
 
 ## 保存方針
 - 正本の保存先は `chrome.storage.local` とする。
-- 状態は `homes_state_v1` に `listingId -> { color, comment, title, updatedAt }` で保持する。
+- 状態は `homes_state_v1` に `listingId -> { color, comment, itemComment, title, updatedAt }` で保持する。
 - 掲載台帳は `homes_listing_registry_v1` に `listingId -> { site, name, address, rent, detailUrl, fingerprint, lastSeenAt }` で保持する。
 - 手動の紐づき group は `homes_link_group_v1` に `listingId -> groupId` で保持する。
 - `groupId` がない掲載は、`auto:<fingerprint>` を実効 group として扱う。
@@ -20,7 +20,8 @@
 - 旧実装の `chrome.storage.sync` と旧 local key は初回だけ読み、`homes_state_v1` へ移行する。
 
 ## 反映方針
-- ステータスとコメントは、現在の掲載が属する実効 group 全体へ同じ値を書き戻す。
+- ステータスと共通コメント `comment` は、現在の掲載が属する実効 group 全体へ同じ値を書き戻す。
+- 個別コメント `itemComment` は掲載ごとにだけ保存し、紐づけ相手へは複写しない。
 - `この掲載の紐づけを解除` は、現在の掲載だけを新しい manual group へ分離する。
 - 候補一覧の行ボタンから、対象掲載ごとに `リンク` / `解除` を直接反映する。
 
@@ -38,6 +39,7 @@
     "room:a0649336242d91a967a399930c6e5ef1e6d33ebd": {
       "color": "1",
       "comment": "要確認",
+      "itemComment": "角部屋",
       "title": "サンプル物件",
       "updatedAt": 1713350000000
     }
@@ -69,8 +71,11 @@
   ここでの `N` は自分自身を含まず、他の掲載との紐づき件数だけを数える。
 - 同一サイト内で manual link group に入った重複掲載は、ページ上では先頭の 1 件だけを表示し、2 件目以降は非表示にする。
 - `紐づけ一覧` には site、物件名リンク、家賃、住所、状態ラベルを表示する。
+- 表示中の掲載では、ステータス badge の右側に個別コメントラベルと小さい `編集` ボタンを表示する。
+- `紐づけ一覧` では、`紐づき中` / `SUUMO` / 状態 badge の右側に、対象掲載の個別コメントラベルと小さい `編集` ボタンを表示する。
 - `紐づけ一覧` に自分自身の掲載は表示しない。
 - linked な掲載には `解除` ボタンを表示し、その行だけ current listing から個別に切り離せるようにする。
 - 候補掲載には `リンク` ボタンを表示し、その行だけ current listing の manual link group へ参加させる。
+- 個別コメントの編集は 1 行入力モーダルで行い、一覧上はテキストラベルとしてだけ表示する。
 - `紐づけ一覧` の下には `もしかして` を表示し、現掲載名または既存リンク名と一致し、かつ住所の「最初の数字まで」が一致する未リンク掲載を補助候補として出す。
 - `詳細URLを貼り付けてリンク` では、台帳に保存済みの detail URL と一致する掲載を見つけ、fingerprint が一致しなくても manual link group へ参加させられる。

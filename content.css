@@ -125,6 +125,13 @@
   display: block;
 }
 
+.hc-panel-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
 .hc-inline {
   display: inline-flex;
   gap: 6px;
@@ -174,6 +181,45 @@
 .hc-status-badge-gray {
   background: #9ca3af;
   color: #111827;
+}
+
+.hc-item-comment-inline {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  min-width: 0;
+  flex-direction: row;
+}
+
+.hc-item-comment-label {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  max-width: min(12ch, 100%);
+  font-size: 12px;
+  color: #475569;
+  white-space: nowrap;
+}
+
+.hc-item-comment-label.is-empty {
+  display: none;
+}
+
+.hc-item-comment-edit {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  background: #fff;
+  color: #334155;
+  font-size: 11px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.hc-item-comment-edit:hover {
+  background: #f8fafc;
 }
 
 .hc-link-toolbar {
@@ -352,6 +398,13 @@
   flex-wrap: wrap;
 }
 
+.hc-link-badge-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
 .hc-link-status,
 .hc-link-site,
 .hc-link-state {
@@ -414,6 +467,80 @@
   white-space: nowrap;
 }
 
+.hc-modal[data-open="0"] {
+  display: none;
+}
+
+.hc-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483647;
+}
+
+.hc-modal-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(15, 23, 42, .38);
+}
+
+.hc-modal-dialog {
+  position: relative;
+  width: min(420px, calc(100vw - 32px));
+  margin: 16vh auto 0;
+  padding: 16px;
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 20px 45px rgba(15, 23, 42, .24);
+}
+
+.hc-modal-header {
+  margin-bottom: 12px;
+  color: #0f172a;
+}
+
+.hc-modal-body {
+  margin-bottom: 12px;
+}
+
+.hc-modal-input {
+  width: 100%;
+  box-sizing: border-box;
+  font-size: 14px;
+  padding: 9px 10px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+}
+
+.hc-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.hc-modal-button {
+  min-width: 72px;
+  padding: 8px 12px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  background: #fff;
+  color: #334155;
+  cursor: pointer;
+}
+
+.hc-modal-button.is-primary {
+  border-color: #2563eb;
+  background: #2563eb;
+  color: #fff;
+}
+
+.hc-modal-button:hover {
+  opacity: .92;
+}
+
+body.hc-modal-open {
+  overflow: clip;
+}
+
 .hc-link-summary {
   display: flex;
   gap: 8px 12px;
@@ -422,6 +549,15 @@
   min-width: 0;
   color: #334155;
   line-height: 1.5;
+}
+
+.hc-link-detail-comment {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  font-size: 11px;
+  color: #64748b;
+  white-space: nowrap;
 }
 
 .hc-link-name {
