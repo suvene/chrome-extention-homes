@@ -219,6 +219,15 @@
     return normalizeText(value).toLowerCase();
   }
 
+  function normalizeMaybeLinkPropertyName(record) {
+    const rawName = typeof record?.name === 'string' ? record.name : '';
+    if (record?.site === 'athome-tokyo-list') {
+      return normalizePropertyName(normalizeText(rawName).split(' ')[0] || '');
+    }
+
+    return normalizePropertyName(rawName);
+  }
+
   function normalizeAddressText(value) {
     const normalized = normalizeText(value)
       .replace(/\s+/g, '')
@@ -969,7 +978,7 @@
     const knownNameAddressPairs = unique(
       [currentRecord, ...linkedIds.map(candidateId => listingRegistry[candidateId]).filter(Boolean)]
         .map(record => {
-          const normalizedName = normalizePropertyName(record?.name);
+          const normalizedName = normalizeMaybeLinkPropertyName(record);
           const addressPrefix = normalizeAddressPrefixToFirstNumber(record?.address);
           return normalizedName && addressPrefix ? `${normalizedName}|${addressPrefix}` : '';
         })
@@ -984,7 +993,7 @@
       .filter(([candidateId, record]) => {
         if (excludedIds.has(candidateId)) return false;
 
-        const normalizedName = normalizePropertyName(record?.name);
+        const normalizedName = normalizeMaybeLinkPropertyName(record);
         const addressPrefix = normalizeAddressPrefixToFirstNumber(record?.address);
         const candidateKey = normalizedName && addressPrefix ? `${normalizedName}|${addressPrefix}` : '';
 
