@@ -1747,7 +1747,7 @@
         leadingBadges: [`<span class="hc-link-status">${escapeHtml(row.status)}</span>`],
         showState: row.actionValue !== 'unlink',
         showCommentInBadges: false,
-        showItemCommentInBadges: row.isMaybe === true,
+        showItemCommentInBadges: true,
         showEditButton: true
       });
       const commentDetailMarkup = (row.actionValue === 'link' && commentPreview)
@@ -1807,7 +1807,9 @@
       const address = record.address || '住所不明';
       const rent = record.rent || '家賃不明';
       const detailUrl = record.detailUrl || '';
-      const badgesMarkup = renderLinkMetadataBadges(suggestion.listingId, record);
+      const badgesMarkup = renderLinkMetadataBadges(suggestion.listingId, record, {
+        showEditButton: false
+      });
 
       return `
         <button
@@ -1965,7 +1967,7 @@
 
     linkGroupCache = nextLinkGroups;
     await persistLinkGroupCache();
-    await writeStateForListingIds(nextCurrentGroupList, mergedState, identity.title);
+    await writeStateForListingIds(nextCurrentGroupList, mergedState, identity.title, { preserveItemComment: true });
     refreshAllCards();
   }
 
@@ -2084,7 +2086,7 @@
     if (!listingId) return;
 
     const defaultTitle = listingRegistry[listingId]?.name || '物件名不明';
-    const current = normalizeState(stateCache[listingId], defaultTitle);
+    const current = normalizeState(getResolvedStateByListingId(listingId).state, defaultTitle);
     const nextItemComment = normalizeText(rawValue).slice(0, ITEM_COMMENT_MAX_LENGTH);
     const nextState = normalizeState({
       ...current,
