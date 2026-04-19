@@ -107,6 +107,32 @@
       getNextPageUrl: getSuumoNextPageUrl,
       getPageLabel: getSuumoPageLabel,
       createPageSeparator: createSuumoPageSeparator
+    },
+    {
+      id: 'athome-tokyo-list',
+      label: 'athome',
+      itemSelector: '.p-property__room--detailbox[data-bukken-no]',
+      matches: location =>
+        location.hostname === 'www.athome.co.jp'
+        && /^\/chintai\/tokyo\/list(?:\/page\d+)?\/?$/.test(location.pathname),
+      getListingId: getAthomeCanonicalListingId,
+      getLegacyLookupIds: getAthomeLookupStorageIds,
+      getTitle: getAthomeTitle,
+      getName: getAthomeName,
+      getAddress: getAthomeAddress,
+      getRent: getAthomeRent,
+      getDetailUrl: getAthomeDetailUrl,
+      getDecoratedElements: card => [card],
+      getPanel: getDefaultPanel,
+      mountPanel: mountAthomePanel,
+      getBuildingContainer: getAthomeBuildingContainer,
+      getContainerCards: getAthomeContainerCards,
+      getBundle: getAthomeBundle,
+      getBuildingBlocks: getAthomeBuildingBlocks,
+      getBundleInsertAnchor: getAthomeBundleInsertAnchor,
+      getNextPageUrl: getAthomeNextPageUrl,
+      getPageLabel: getAthomePageLabel,
+      createPageSeparator: createDefaultPageSeparator
     }
   ];
   const currentSite = detectCurrentSite();
@@ -191,6 +217,24 @@
 
   function normalizePropertyName(value) {
     return normalizeText(value).toLowerCase();
+  }
+
+  function normalizeMaybeLinkPropertyName(record) {
+    const rawName = typeof record?.name === 'string' ? record.name : '';
+    if (record?.site === 'athome-tokyo-list') {
+      return normalizePropertyName(normalizeText(rawName).split(' ')[0] || '');
+    }
+
+    return normalizePropertyName(rawName);
+  }
+
+  function normalizeMaybeLinkAddressPrefix(record) {
+    const rawAddress = typeof record?.address === 'string' ? record.address : '';
+    if (record?.site === 'athome-tokyo-list' && rawAddress && !rawAddress.startsWith('東京都')) {
+      return normalizeAddressPrefixToFirstNumber(`東京都${rawAddress}`);
+    }
+
+    return normalizeAddressPrefixToFirstNumber(rawAddress);
   }
 
   function normalizeAddressText(value) {
@@ -475,6 +519,75 @@
       return new URL(href, window.location.href).href;
     } catch (error) {
       console.warn('Failed to resolve SUUMO detail URL', error);
+      return '';
+    }
+  }
+
+  function parseAthomeRoomIdFromHref(href) {
+    if (typeof href !== 'string' || !href.trim()) return '';
+
+    const match = href.match(/\/chintai\/(\d+)\//);
+    return match?.[1] || '';
+  }
+
+  function getAthomeBuildingRoot(card) {
+    return card.closest('.p-property.p-property--building.js-block') || card;
+  }
+
+  function getAthomeDetailLink(card) {
+    return card.querySelector('.p-property__room-more-inner[href]') || null;
+  }
+
+  function getAthomeCanonicalListingId(card) {
+    const bukkenNo = card.dataset?.bukkenNo?.trim();
+    if (bukkenNo) return `athome-room:${bukkenNo}`;
+
+    const detailRoomId = parseAthomeRoomIdFromHref(getAthomeDetailLink(card)?.getAttribute('href'));
+    return detailRoomId ? `athome-room:${detailRoomId}` : '';
+  }
+
+  function getAthomeLookupStorageIds(card) {
+    const ids = [];
+    const canonicalId = getAthomeCanonicalListingId(card);
+    const detailUrl = getAthomeDetailUrl(card);
+    const detailRoomId = parseAthomeRoomIdFromHref(getAthomeDetailLink(card)?.getAttribute('href'));
+
+    pushUnique(ids, canonicalId);
+    pushUnique(ids, detailRoomId ? `athome-bukken:${detailRoomId}` : '');
+    pushUnique(ids, detailUrl ? `athome-href:${detailUrl}` : '');
+
+    return ids;
+  }
+
+  function getAthomeName(card) {
+    return normalizeSpaces(getAthomeBuildingRoot(card).querySelector('.p-property__title--building')?.textContent || '');
+  }
+
+  function getAthomeTitle(card) {
+    const title = getAthomeName(card);
+    if (title) return title;
+
+    const roomLabel = normalizeSpaces(card.querySelector('.p-property__room-number')?.textContent || '');
+    return roomLabel || '物件名不明';
+  }
+
+  function getAthomeAddress(card) {
+    return normalizeSpaces(getAthomeBuildingRoot(card).querySelector('.p-property__information-hint dd strong')?.textContent || '');
+  }
+
+  function getAthomeRent(card) {
+    const rent = normalizeSpaces(card.querySelector('.p-property__information-rent')?.textContent || '');
+    return rent ? `${rent}万円` : '';
+  }
+
+  function getAthomeDetailUrl(card) {
+    const href = getAthomeDetailLink(card)?.getAttribute('href') || '';
+    if (!href) return '';
+
+    try {
+      return new URL(href, window.location.href).href;
+    } catch (error) {
+      console.warn('Failed to resolve athome detail URL', error);
       return '';
     }
   }
@@ -874,8 +987,8 @@
     const knownNameAddressPairs = unique(
       [currentRecord, ...linkedIds.map(candidateId => listingRegistry[candidateId]).filter(Boolean)]
         .map(record => {
-          const normalizedName = normalizePropertyName(record?.name);
-          const addressPrefix = normalizeAddressPrefixToFirstNumber(record?.address);
+          const normalizedName = normalizeMaybeLinkPropertyName(record);
+          const addressPrefix = normalizeMaybeLinkAddressPrefix(record);
           return normalizedName && addressPrefix ? `${normalizedName}|${addressPrefix}` : '';
         })
         .filter(Boolean)
@@ -889,8 +1002,8 @@
       .filter(([candidateId, record]) => {
         if (excludedIds.has(candidateId)) return false;
 
-        const normalizedName = normalizePropertyName(record?.name);
-        const addressPrefix = normalizeAddressPrefixToFirstNumber(record?.address);
+        const normalizedName = normalizeMaybeLinkPropertyName(record);
+        const addressPrefix = normalizeMaybeLinkAddressPrefix(record);
         const candidateKey = normalizedName && addressPrefix ? `${normalizedName}|${addressPrefix}` : '';
 
         return candidateKey ? knownNameAddressPairs.includes(candidateKey) : false;
@@ -1350,6 +1463,10 @@
     return root.querySelector('ul.l-cassetteitem');
   }
 
+  function getAthomeBundle(root = document) {
+    return root.querySelector('.p-result__main');
+  }
+
   function getHomesCondition1BuildingBlocks(bundle) {
     if (!bundle) return [];
 
@@ -1368,12 +1485,22 @@
     return [...bundle.children].filter(child => child.matches('li'));
   }
 
+  function getAthomeBuildingBlocks(bundle) {
+    if (!bundle) return [];
+
+    return [...bundle.children].filter(child => child.matches('.p-property.p-property--building.js-block'));
+  }
+
   function getHomesCondition1BundleInsertAnchor(bundle) {
     return bundle?.querySelector('.bukkenListAction.nocheck.bottom') || null;
   }
 
   function getHomesConditionListBundleInsertAnchor(bundle) {
     return bundle?.querySelector('.bundleAction.is-positionBottom') || null;
+  }
+
+  function getAthomeBundleInsertAnchor(bundle) {
+    return bundle?.querySelector('#target.c-allcheck--bottom.c-allcheck--building') || null;
   }
 
   function getHomesNextPageUrl(root = document) {
@@ -1417,6 +1544,33 @@
 
   function getSuumoPageLabel(root = document) {
     const pageNumber = root.querySelector('.pagination_set-nav .pagination-current')?.textContent?.trim();
+    if (!pageNumber) return '';
+
+    return `Page ${pageNumber}`;
+  }
+
+  function buildAthomePageUrl(pageNumber) {
+    const normalizedPage = Number.parseInt(String(pageNumber), 10);
+    if (!Number.isFinite(normalizedPage) || normalizedPage <= 1) {
+      return new URL('/chintai/tokyo/list/', window.location.origin).href;
+    }
+
+    return new URL(`/chintai/tokyo/list/page${normalizedPage}/`, window.location.origin).href;
+  }
+
+  function getAthomeNextPageUrl(root = document) {
+    const pager = root.querySelector('.c-paging__pagenavi');
+    if (!pager) return '';
+
+    const nextLink = pager.querySelector('a.c-paging__pagenavi-item[onclick*="pushGapCustomForPagingPost(\'next\')"]');
+    const pageNumber = nextLink?.getAttribute('page')?.trim();
+    if (!pageNumber) return '';
+
+    return buildAthomePageUrl(pageNumber);
+  }
+
+  function getAthomePageLabel(root = document) {
+    const pageNumber = root.querySelector('.c-paging__pagenavi-item--current')?.textContent?.trim();
     if (!pageNumber) return '';
 
     return `Page ${pageNumber}`;
@@ -1810,15 +1964,21 @@
       const badgesMarkup = renderLinkMetadataBadges(suggestion.listingId, record, {
         showEditButton: false
       });
+      const nameMarkup = detailUrl
+        ? `<a href="${escapeHtml(detailUrl)}" target="_blank" rel="noopener" class="hc-link-suggestion-name">${escapeHtml(name)}</a>`
+        : `<span class="hc-link-suggestion-name is-static">${escapeHtml(name)}</span>`;
 
       return `
-        <button
-          type="button"
-          class="hc-link-suggestion-item"
-          data-hc-suggest-url="${escapeHtml(detailUrl)}"
-        >
+        <div class="hc-link-suggestion-item">
           <span class="hc-link-suggestion-top">
-            <span class="hc-link-suggestion-name">${escapeHtml(name)}</span>
+            ${nameMarkup}
+            <button
+              type="button"
+              class="hc-link-row-button hc-link-suggestion-action"
+              data-hc-suggest-url="${escapeHtml(detailUrl)}"
+            >
+              リンク
+            </button>
           </span>
           ${badgesMarkup}
           <span class="hc-link-suggestion-meta">
@@ -1826,7 +1986,7 @@
             <span class="hc-link-address">${escapeHtml(address)}</span>
           </span>
           <span class="hc-link-suggestion-url">${escapeHtml(detailUrl)}</span>
-        </button>
+        </div>
       `;
     }).join('');
   }
@@ -2253,7 +2413,21 @@
       openItemCommentModal(editButton.getAttribute('data-hc-edit-item-comment') || '');
     });
 
+    if (currentSite.id === 'athome-tokyo-list') {
+      installAthomePanelInteractionGuards(panel);
+    }
+
     return panel;
+  }
+
+  function installAthomePanelInteractionGuards(panel) {
+    const stopPanelEvent = event => {
+      event.stopPropagation();
+    };
+
+    ['mousedown', 'mouseup', 'click', 'dblclick'].forEach(eventName => {
+      panel.addEventListener(eventName, stopPanelEvent);
+    });
   }
 
   function mountHomesCondition1Panel(card, panel) {
@@ -2297,12 +2471,28 @@
     card.appendChild(row);
   }
 
+  function mountAthomePanel(card, panel) {
+    const mountPoint = card.querySelectorAll('.p-property__room--detail-information')[1]
+      || card.lastElementChild
+      || card;
+
+    mountPoint.appendChild(panel);
+  }
+
   function getSuumoBuildingContainer(card) {
     return card.closest('li');
   }
 
   function getSuumoContainerCards(container) {
     return [...container.querySelectorAll('table.cassetteitem_other > tbody')];
+  }
+
+  function getAthomeBuildingContainer(card) {
+    return card.closest('.p-property.p-property--building.js-block');
+  }
+
+  function getAthomeContainerCards(container) {
+    return [...container.querySelectorAll('.p-property__room--detailbox[data-bukken-no]')];
   }
 
   function enhanceCard(card) {
