@@ -176,7 +176,7 @@
     return normalizeSpaces(value.normalize('NFKC'));
   }
 
-  function truncateCommentPreview(value, maxLength = 25) {
+  function truncateCommentPreview(value, maxLength = 40) {
     const normalized = normalizeText(value);
     if (!normalized) return '';
 
@@ -1623,7 +1623,7 @@
       const resolvedState = getResolvedStateByListingId(row.listingId).state;
       const stateOption = getStatusOption(resolvedState.color);
       const stateClassName = stateOption.colorClass ? ` hc-link-state-${stateOption.colorClass}` : '';
-      const commentPreview = truncateCommentPreview(resolvedState.comment, 25);
+      const commentPreview = truncateCommentPreview(resolvedState.comment, 40);
       const commentMarkup = commentPreview
         ? `<span class="hc-link-comment-preview" title="${escapeHtml(normalizeText(resolvedState.comment))}">${escapeHtml(commentPreview)}</span>`
         : '';
