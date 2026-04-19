@@ -1612,6 +1612,8 @@
     const stateOption = getStatusOption(resolvedState.color);
     const stateClassName = stateOption.colorClass ? ` hc-link-state-${stateOption.colorClass}` : '';
     const commentPreview = truncateCommentPreview(resolvedState.comment, 40);
+    const showState = options.showState !== false;
+    const showComment = options.showComment !== false;
     const commentMarkup = commentPreview
       ? `<span class="hc-link-comment-preview" title="${escapeHtml(normalizeText(resolvedState.comment))}">${escapeHtml(commentPreview)}</span>`
       : '';
@@ -1621,8 +1623,8 @@
       <span class="hc-link-badges">
         ${leadingBadges.join('')}
         <span class="hc-link-site">${escapeHtml(siteLabel)}</span>
-        <span class="hc-link-state${stateClassName}">${escapeHtml(stateOption.badgeLabel)}</span>
-        ${commentMarkup}
+        ${showState ? `<span class="hc-link-state${stateClassName}">${escapeHtml(stateOption.badgeLabel)}</span>` : ''}
+        ${showComment ? commentMarkup : ''}
       </span>
     `;
   }
@@ -1641,7 +1643,9 @@
       const rent = record.rent || '家賃不明';
       const detailUrl = record.detailUrl || '';
       const badgesMarkup = renderLinkMetadataBadges(row.listingId, record, {
-        leadingBadges: [`<span class="hc-link-status">${escapeHtml(row.status)}</span>`]
+        leadingBadges: [`<span class="hc-link-status">${escapeHtml(row.status)}</span>`],
+        showState: row.actionValue !== 'unlink',
+        showComment: row.actionValue !== 'unlink'
       });
       const nameMarkup = detailUrl
         ? `<a href="${escapeHtml(detailUrl)}" target="_blank" rel="noopener" class="hc-link-name">${escapeHtml(name)}</a>`
