@@ -106,6 +106,8 @@
   border: 1px solid #d7dce2;
   background: #f7fafc;
   border-radius: 8px;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .hc-panel-row {
@@ -274,6 +276,8 @@
 .hc-link-list {
   display: grid;
   gap: 8px;
+  width: 100%;
+  text-align: left;
 }
 
 .hc-link-suggestions {
@@ -291,21 +295,26 @@
   font-size: 12px;
   font-weight: 700;
   color: #334155;
+  text-align: left;
 }
 
 .hc-link-subsection {
   margin-top: 12px;
+  width: 100%;
+  text-align: left;
 }
 
 .hc-link-item {
   display: grid;
-  grid-template-columns: 1fr auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   gap: 10px;
   align-items: center;
   padding: 8px 10px;
   border: 1px solid #e2e8f0;
   border-radius: 8px;
   background: #fff;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .hc-filter-checkbox:disabled {
@@ -403,6 +412,7 @@
   gap: 8px;
   align-items: center;
   flex-wrap: wrap;
+  min-width: 0;
 }
 
 .hc-link-status,
@@ -547,6 +557,7 @@ body.hc-modal-open {
   align-items: baseline;
   flex-wrap: wrap;
   min-width: 0;
+  width: 100%;
   color: #334155;
   line-height: 1.5;
 }
@@ -722,4 +733,6 @@ table.cassetteitem_other > tbody.hc-filtered-out {
 tr.hc-panel-host > td.hc-panel-cell {
   padding: 0 0 8px;
   border-bottom: 1px solid #e5e7eb;
+  width: 100%;
+  box-sizing: border-box;
 }
