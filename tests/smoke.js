@@ -34,6 +34,7 @@ const requiredPatterns = [
   'function getCandidateListingIds',
   'function getDuplicateLinkedListingIdsOnPage',
   'function findListingIdByDetailUrl',
+  'function getDetailUrlSuggestions',
   'async function applySelectedLinkIds',
   'async function applyRowLinkAction',
   'async function applyDetailUrlLink',
@@ -45,6 +46,8 @@ const requiredPatterns = [
   '紐づけ一覧',
   'class="hc-link-name"',
   'class="hc-link-url-input"',
+  'data-hc-link-suggestions',
+  'data-hc-suggest-url',
   'data-hc-link-action',
   'URLでリンク',
   'data-hc-last-updated',
@@ -116,6 +119,10 @@ function checkRequiredPatterns() {
 
   if (!css.includes('.hc-link-url-input')) {
     throw new Error('Required detail URL input selector is missing from content.css');
+  }
+
+  if (!css.includes('.hc-link-suggestion-item')) {
+    throw new Error('Required detail URL suggestion selector is missing from content.css');
   }
 
   if (!css.includes('.hc-link-row-button')) {

@@ -840,6 +840,54 @@
     })?.[0] || '';
   }
 
+  function getDetailUrlSuggestions(listingId, rawQuery) {
+    const query = normalizeText(rawQuery).toLowerCase();
+    if (!query) return [];
+
+    const linkedIds = new Set(getLinkedListingIds(listingId));
+
+    return Object.entries(listingRegistry)
+      .filter(([candidateId, record]) => {
+        if (candidateId === listingId) return false;
+        if (linkedIds.has(candidateId)) return false;
+        if (!record?.detailUrl) return false;
+
+        const haystacks = [
+          record.detailUrl,
+          record.name,
+          record.address,
+          record.rent
+        ]
+          .map(value => normalizeText(value).toLowerCase())
+          .filter(Boolean);
+
+        return haystacks.some(value => value.includes(query));
+      })
+      .map(([candidateId, record]) => {
+        const normalizedUrl = normalizeText(record.detailUrl).toLowerCase();
+        const normalizedName = normalizeText(record.name).toLowerCase();
+        const normalizedAddress = normalizeText(record.address).toLowerCase();
+        let score = 0;
+
+        if (normalizedUrl.startsWith(query)) score += 6;
+        else if (normalizedUrl.includes(query)) score += 4;
+
+        if (normalizedName.includes(query)) score += 3;
+        if (normalizedAddress.includes(query)) score += 2;
+
+        return {
+          listingId: candidateId,
+          record,
+          score
+        };
+      })
+      .sort((left, right) => {
+        if (right.score !== left.score) return right.score - left.score;
+        return (right.record?.lastSeenAt || 0) - (left.record?.lastSeenAt || 0);
+      })
+      .slice(0, 6);
+  }
+
   function getBestResolvedState(ids, defaultTitle) {
     let resolvedId = '';
     let resolvedState = normalizeState({}, defaultTitle);
@@ -1571,6 +1619,57 @@
     }).join('');
   }
 
+  function renderDetailUrlSuggestionsMarkup(card, rawQuery) {
+    const suggestions = getDetailUrlSuggestions(getCardIdentity(card).listingId, rawQuery);
+
+    if (!rawQuery.trim()) {
+      return '';
+    }
+
+    if (suggestions.length === 0) {
+      return '<p class="hc-link-suggestion-empty">一致する候補はありません。</p>';
+    }
+
+    return suggestions.map(suggestion => {
+      const record = suggestion.record || {};
+      const siteLabel = getSiteLabel(record.site);
+      const name = record.name || '物件名不明';
+      const address = record.address || '住所不明';
+      const rent = record.rent || '家賃不明';
+      const detailUrl = record.detailUrl || '';
+
+      return `
+        <button
+          type="button"
+          class="hc-link-suggestion-item"
+          data-hc-suggest-url="${escapeHtml(detailUrl)}"
+        >
+          <span class="hc-link-suggestion-top">
+            <span class="hc-link-suggestion-name">${escapeHtml(name)}</span>
+            <span class="hc-link-site">${escapeHtml(siteLabel)}</span>
+          </span>
+          <span class="hc-link-suggestion-meta">
+            <span class="hc-link-rent">${escapeHtml(rent)}</span>
+            <span class="hc-link-address">${escapeHtml(address)}</span>
+          </span>
+          <span class="hc-link-suggestion-url">${escapeHtml(detailUrl)}</span>
+        </button>
+      `;
+    }).join('');
+  }
+
+  function syncDetailUrlSuggestions(card) {
+    const panel = currentSite.getPanel(card);
+    if (!panel) return;
+
+    const detailUrlInput = panel.querySelector('.hc-link-url-input');
+    const suggestionList = panel.querySelector('[data-hc-link-suggestions]');
+    if (!detailUrlInput || !suggestionList) return;
+
+    suggestionList.innerHTML = renderDetailUrlSuggestionsMarkup(card, detailUrlInput.value || '');
+    suggestionList.classList.toggle('is-empty', !detailUrlInput.value.trim());
+  }
+
   function syncLinkPanel(card) {
     const identity = getCardIdentity(card);
     const panel = currentSite.getPanel(card);
@@ -1699,6 +1798,7 @@
     selectedIds.add(targetListingId);
     detailUrlInput.value = '';
     await applySelectedLinkIds(card, selectedIds);
+    syncDetailUrlSuggestions(card);
   }
 
   async function applyRowLinkAction(card, targetListingId, action) {
@@ -1746,6 +1846,7 @@
           >
           <button type="button" class="hc-link-url-button">URLでリンク</button>
         </div>
+        <div class="hc-link-suggestions is-empty" data-hc-link-suggestions></div>
       </div>
 
       <div class="hc-panel-row hc-panel-row-links-list">
@@ -1759,6 +1860,7 @@
     const linkList = panel.querySelector('[data-hc-link-list]');
     const detailUrlInput = panel.querySelector('.hc-link-url-input');
     const detailUrlButton = panel.querySelector('.hc-link-url-button');
+    const detailUrlSuggestions = panel.querySelector('[data-hc-link-suggestions]');
 
     colorSelect.value = state.color;
     commentArea.value = state.comment || '';
@@ -1813,9 +1915,21 @@
       await applyDetailUrlLink(card, detailUrlInput);
     });
 
+    detailUrlInput.addEventListener('input', () => {
+      syncDetailUrlSuggestions(card);
+    });
+
     detailUrlInput.addEventListener('keydown', async event => {
       if (event.key !== 'Enter') return;
       event.preventDefault();
+      await applyDetailUrlLink(card, detailUrlInput);
+    });
+
+    detailUrlSuggestions.addEventListener('click', async event => {
+      const suggestionButton = event.target.closest('[data-hc-suggest-url]');
+      if (!suggestionButton) return;
+
+      detailUrlInput.value = suggestionButton.getAttribute('data-hc-suggest-url') || '';
       await applyDetailUrlLink(card, detailUrlInput);
     });
 
