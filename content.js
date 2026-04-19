@@ -4,7 +4,7 @@
   const STATE_STORAGE_KEY = 'homes_state_v1';
   const LISTING_REGISTRY_STORAGE_KEY = 'homes_listing_registry_v1';
   const LINK_GROUP_STORAGE_KEY = 'homes_link_group_v1';
-  const LOCAL_FILTER_STORAGE_KEY = 'homes_header_filter_v1';
+  const LOCAL_FILTER_STORAGE_KEY_PREFIX = 'homes_header_filter_v1';
   const LOCAL_MIGRATION_FLAG_KEY = 'homes_local_migration_v1';
   const COMMENT_SAVE_DEBOUNCE_MS = 700;
   const REGISTRY_PERSIST_DEBOUNCE_MS = 400;
@@ -122,23 +122,28 @@
   }
 
   async function loadAll() {
+    const localFilterStorageKey = getLocalFilterStorageKey();
     await migrateLegacyStateIfNeeded();
 
     const stored = await chrome.storage.local.get([
       STATE_STORAGE_KEY,
       LISTING_REGISTRY_STORAGE_KEY,
       LINK_GROUP_STORAGE_KEY,
-      LOCAL_FILTER_STORAGE_KEY
+      localFilterStorageKey
     ]);
 
     stateCache = normalizeStateMap(stored[STATE_STORAGE_KEY]);
     listingRegistry = normalizeListingRegistry(stored[LISTING_REGISTRY_STORAGE_KEY]);
     linkGroupCache = normalizeLinkGroupMap(stored[LINK_GROUP_STORAGE_KEY]);
-    activeFilterValues = normalizeStoredFilterValues(stored[LOCAL_FILTER_STORAGE_KEY]);
+    activeFilterValues = normalizeStoredFilterValues(stored[localFilterStorageKey]);
   }
 
   function detectCurrentSite() {
     return SITE_CONFIGS.find(site => site.matches(window.location)) || null;
+  }
+
+  function getLocalFilterStorageKey(siteId = currentSite?.id || '') {
+    return `${LOCAL_FILTER_STORAGE_KEY_PREFIX}:${siteId || 'default'}`;
   }
 
   function pushUnique(values, value) {
@@ -697,8 +702,9 @@
   }
 
   async function persistFilterValues() {
+    const localFilterStorageKey = getLocalFilterStorageKey();
     await chrome.storage.local.set({
-      [LOCAL_FILTER_STORAGE_KEY]: [...activeFilterValues]
+      [localFilterStorageKey]: [...activeFilterValues]
     });
   }
 
@@ -1882,8 +1888,10 @@
   function handleStorageChange(changes, areaName) {
     if (areaName !== 'local') return;
 
-    if (changes[LOCAL_FILTER_STORAGE_KEY]) {
-      activeFilterValues = normalizeStoredFilterValues(changes[LOCAL_FILTER_STORAGE_KEY].newValue);
+    const localFilterStorageKey = getLocalFilterStorageKey();
+
+    if (changes[localFilterStorageKey]) {
+      activeFilterValues = normalizeStoredFilterValues(changes[localFilterStorageKey].newValue);
 
       document.querySelectorAll('.hc-filter-checkbox').forEach(checkbox => {
         checkbox.checked = activeFilterValues.has(checkbox.value);
