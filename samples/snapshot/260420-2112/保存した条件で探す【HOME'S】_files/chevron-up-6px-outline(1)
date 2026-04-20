@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg id="a" data-name="Icon_Interface_インターフェイス" xmlns="http://www.w3.org/2000/svg" width="56" height="56" viewBox="0 0 56 56">
+	<style>@media(forced-colors:active){@media(prefers-color-scheme:dark){[fill]:not([fill="none"]){fill:#fff!important}}@media(prefers-color-scheme:light){[fill]:not([fill="none"]){fill:#000!important}}}</style>
+  <path d="M28.4,15.3l21.4,21.1c.2.2.2.5,0,.7l-3.5,3.6c-.2.2-.5.2-.7,0l-17.2-17c-.2-.2-.5-.2-.7,0l-17.2,17c-.2.2-.5.2-.7,0l-3.5-3.6c-.2-.2-.2-.5,0-.7L27.6,15.3c.2-.2.5-.2.7,0Z" fill="#4c4c4c" stroke-width="0"/>
+  <rect x="0" y="0" width="56" height="56" transform="translate(56 56) rotate(-180)" fill="none" stroke-width="0"/>
+</svg>

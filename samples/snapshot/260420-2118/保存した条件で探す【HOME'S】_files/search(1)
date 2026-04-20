@@ -1,0 +1,62 @@
+cXJsonpCB1(
+{
+    "searchResult": {
+        "pageNumber": 0,
+        "impressionId": "8dedb7ef569c4c80886151d8afde07e0",
+        "contentBaseURL": "https://cdn-content-production.cxpublic.com/",
+        "actionBaseURL": "https://adserver.cxad.cxense.com/adserver/action",
+
+        
+        "previous": "",
+                
+        "next": "",
+        
+        "spaces": [
+                        
+            {
+                "id": "0000000162de2f4c",
+                "adUnitWidth": 940,
+                "adUnitHeight": 130,
+                "isVerticallyOriented": false,
+                "ads": [
+                                        
+                    {
+                        "id" :"00000001678acd4c",
+                        "product": "0000000162e36ec0",
+                                                "creative": {
+    "type": "com.cxense.cxad.plugin.combocreative.ComboCreativeFeature",
+    "id": "0000000167a7a84a",
+    "templateName": "コンボクリエイティブ",
+
+    "title": ["PCB202201"],
+
+    "content": [
+                        { "key": "種別", "value": ["不動産の売却依頼・一括査定"]}
+                    ,        { "key": "キャッチコピー", "value": ["持ち家を売って、賃貸に住み替え"]}
+                    ,        { "key": "会社名", "value": ["ホームズ"]}
+            
+    ],
+    "images": [
+                                        {
+                "key": "画像",
+                "contentServerId": "337b428fe7f517299df366c3f894eaad6dc4175d2584e4a114e5ff095c70c1cc.jpg",
+                "source": "https://cdn-content-production.cxpublic.com/337b428fe7f517299df366c3f894eaad6dc4175d2584e4a114e5ff095c70c1cc.jpg",
+                "href": "https://cdn-content-production.cxpublic.com/337b428fe7f517299df366c3f894eaad6dc4175d2584e4a114e5ff095c70c1cc.jpg",
+                "filename": "バナー_住み替え_PCB.jpg",
+                "height": 88,
+                "width": 118
+            }
+                            ],
+    "flashFiles": [
+            ],
+    "destinationUrl": "https://www.homes.co.jp/satei/lp/p003/?utm_medium=own&utm_campaign=02_pc_homesadb&cmp_id=02_pc_homesadb"
+    },
+                                                "contextToken": "5t8EgdoMcdEktluNGHT8_TJRsDZQw-uE6aNn96wut9kSqhb3WJZyGDnzlBllfVla4NSX-fq-wz_LNmL12l8HSAL1rLJqr99nlkvoflchPQlrd1S1ZSi6mKlbiwvW4nX6qLwiq4Hj-FCDUKpHIkBpvkwajHK68tx8Fz6Wy2PxwrFXF6h0gfx2b8QzWVmjrW6WJr4k5Jpxa5uR5V8gR91g4Fk4KH_uwnKd3qVMNyWadJUu2zQ.",
+                        "clickUrl": "https://s-adserver.cxad.cxense.com/adserver/click/5t8EgdoMcdEktluNGHT8_TJRsDZQw-uE6aNn96wut9kSqhb3WJZyGDnzlBllfVla4NSX-fq-wz_LNmL12l8HSAL1rLJqr99nlkvoflchPQlrd1S1ZSi6mKlbiwvW4nX6qLwiq4Hj-FCDUKpHIkBpvkwajHK68tx8Fz6Wy2PxwrFXF6h0gfx2b8QzWVmjrW6WJr4k5Jpxa5uR5V8gR91g4Fk4KH_uwnKd3qVMNyWadJUu2zQ."
+                                            }                    
+                ]
+            }            
+        ]
+    }
+}
+);

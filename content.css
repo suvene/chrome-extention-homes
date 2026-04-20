@@ -754,6 +754,42 @@ body.hc-modal-open {
   display: none !important;
 }
 
+#contents .sec-mainContents {
+  width: max(1100px, min(1320px, calc(100vw - 32px))) !important;
+  box-sizing: border-box;
+}
+
+#freeword_form > .sec-wrap {
+  width: 100% !important;
+  max-width: none !important;
+}
+
+#freeword_form > .sec-wrap > .sec-main {
+  float: right !important;
+  width: calc(100% - 292px) !important;
+  max-width: none !important;
+  min-width: 0 !important;
+}
+
+#freeword_form > .sec-wrap > .sec-sub,
+#freeword_form > .sec-wrap > #prg-left_column {
+  float: left !important;
+  width: 280px !important;
+  max-width: 280px !important;
+}
+
+#freeword_form #searchResult,
+#freeword_form #prg-mod-bukkenList,
+#freeword_form #prg-mod-bukkenList .prg-bundle,
+#freeword_form #prg-mod-bukkenList .prg-bundle > .bukkenListAction > .wrap,
+#freeword_form #prg-mod-bukkenList .prg-bundle > .mod-mergeBuilding--rent--photo,
+#freeword_form .mod-listPaging.buildTotalCount .inner {
+  width: 100% !important;
+  max-width: none !important;
+  min-width: 0 !important;
+  box-sizing: border-box;
+}
+
 .mod-newArrivalBuilding,
 tr.prg-roomRow,
 table.cassetteitem_other > tbody,

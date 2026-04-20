@@ -212,6 +212,26 @@ function checkRequiredPatterns() {
   if (!css.includes('.p-property__room--detailbox.hc-filtered-out')) {
     throw new Error('Required athome filtered selector is missing from content.css');
   }
+
+  if (!css.includes('#contents .sec-mainContents')) {
+    throw new Error('Required HOME\'S condition1 outer layout selector is missing from content.css');
+  }
+
+  if (!css.includes('width: max(1100px, min(1320px, calc(100vw - 32px))) !important;')) {
+    throw new Error('Required HOME\'S condition1 outer width adjustment is missing from content.css');
+  }
+
+  if (!css.includes('width: calc(100% - 292px) !important;')) {
+    throw new Error('Required HOME\'S condition1 main column width adjustment is missing from content.css');
+  }
+
+  if (!css.includes('width: 280px !important;')) {
+    throw new Error('Required HOME\'S condition1 sidebar width adjustment is missing from content.css');
+  }
+
+  if (!css.includes('#freeword_form #prg-mod-bukkenList')) {
+    throw new Error('Required HOME\'S condition1 result width selector is missing from content.css');
+  }
 }
 
 function checkExportFilenameConvention() {
