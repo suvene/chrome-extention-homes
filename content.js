@@ -1012,6 +1012,79 @@
       .map(([candidateId]) => candidateId);
   }
 
+  function sortListingIdsByLastSeen(listingIds) {
+    return [...unique(listingIds)].sort((left, right) => {
+      return (listingRegistry[right]?.lastSeenAt || 0) - (listingRegistry[left]?.lastSeenAt || 0);
+    });
+  }
+
+  function getResolvedStateForListingIds(listingIds, defaultTitle = '物件名不明') {
+    const normalizedIds = unique(listingIds);
+    if (normalizedIds.length === 0) {
+      return normalizeState({}, defaultTitle);
+    }
+
+    return normalizeState(getBestResolvedState(normalizedIds, defaultTitle).state, defaultTitle);
+  }
+
+  function getLongestAddressForListingIds(listingIds) {
+    return listingIds
+      .map(listingId => listingRegistry[listingId]?.address || '')
+      .filter(Boolean)
+      .sort((left, right) => right.length - left.length)[0] || '住所不明';
+  }
+
+  function buildLinkGroupLabelParts(record = {}, listingIds = []) {
+    const name = record.name || '物件名不明';
+    const rent = record.rent || '家賃不明';
+    const address = getLongestAddressForListingIds(listingIds);
+    const listingCount = listingIds.length;
+    const summaryText = `${name} / ${rent} / ${address}`;
+
+    return {
+      name,
+      rent,
+      address,
+      countText: listingCount > 1 ? `(${listingCount}件)` : '',
+      summaryText
+    };
+  }
+
+  function buildLinkGroupItems(listingIds, options = {}) {
+    const currentListingId = options.currentListingId || '';
+    const statusLabel = options.statusLabel || '';
+    const actionLabel = options.actionLabel || '';
+    const actionValue = options.actionValue || '';
+    const seenGroupIds = new Set();
+
+    return listingIds.map(listingId => {
+      const groupId = getEffectiveGroupId(listingId) || getSoloGroupId(listingId);
+      if (!groupId || seenGroupIds.has(groupId)) return null;
+
+      seenGroupIds.add(groupId);
+
+      const groupedMembers = getGroupMembersByGroupId(groupId);
+      const allMemberIds = sortListingIdsByLastSeen(groupedMembers.length > 0 ? groupedMembers : [listingId]);
+      const memberIds = allMemberIds.filter(id => id !== currentListingId);
+      if (memberIds.length === 0) return null;
+
+      const representativeId = memberIds[0] || allMemberIds[0] || listingId;
+      const representativeRecord = listingRegistry[representativeId] || {};
+
+      return {
+        groupId,
+        domKey: `${actionValue}:${groupId}`,
+        label: buildLinkGroupLabelParts(representativeRecord, memberIds),
+        statusLabel,
+        actionLabel,
+        actionValue,
+        memberIds,
+        representativeId,
+        resolvedState: getResolvedStateForListingIds(allMemberIds, representativeRecord.name || '物件名不明')
+      };
+    }).filter(Boolean);
+  }
+
   function findListingIdByDetailUrl(detailUrl, currentListingId = '') {
     const normalizedUrl = normalizeDetailUrl(detailUrl);
     if (!normalizedUrl) return '';
@@ -1802,48 +1875,36 @@
     syncBuildingVisibility(buildingContainers);
   }
 
-  function buildLinkListRows(card) {
+  function buildLinkListGroups(card) {
     const identity = getCardIdentity(card);
     const linkedIds = getLinkedListingIds(identity.listingId);
     const linkedListingIds = linkedIds.filter(listingId => listingId !== identity.listingId);
     const candidateIds = getCandidateListingIds(identity.listingId);
-    const rows = [];
-
-    linkedListingIds.forEach(listingId => {
-      rows.push({
-        listingId,
-        record: listingRegistry[listingId],
-        status: '紐づき中',
-        actionLabel: '解除',
-        actionValue: 'unlink'
-      });
-    });
-
-    candidateIds.forEach(listingId => {
-      rows.push({
-        listingId,
-        record: listingRegistry[listingId],
-        status: '候補',
-        actionLabel: 'リンク',
-        actionValue: 'link'
-      });
-    });
 
     return {
       linkedCount: linkedListingIds.length,
-      rows
+      groups: [
+        ...buildLinkGroupItems(linkedListingIds, {
+          currentListingId: identity.listingId,
+          statusLabel: '紐づき中',
+          actionLabel: '解除',
+          actionValue: 'unlink'
+        }),
+        ...buildLinkGroupItems(candidateIds, {
+          statusLabel: 'リンク',
+          actionLabel: 'リンク',
+          actionValue: 'link'
+        })
+      ]
     };
   }
 
-  function buildMaybeLinkRows(card) {
-    return getMaybeLinkListingIds(getCardIdentity(card).listingId).map(listingId => ({
-      listingId,
-      record: listingRegistry[listingId],
-      status: 'もしかして',
+  function buildMaybeLinkGroups(card) {
+    return buildLinkGroupItems(getMaybeLinkListingIds(getCardIdentity(card).listingId), {
+      statusLabel: 'もしかして',
       actionLabel: 'リンク',
-      actionValue: 'link',
-      isMaybe: true
-    }));
+      actionValue: 'link'
+    });
   }
 
   function renderLinkMetadataBadges(listingId, record = {}, options = {}) {
@@ -1883,65 +1944,107 @@
     `;
   }
 
-  function renderLinkRowsMarkup(rows, emptyText = '候補はまだありません。') {
-    if (rows.length === 0) {
+  function renderLinkGroupHeaderMarkup(group) {
+    const stateOption = getStatusOption(group.resolvedState.color);
+    const stateClassName = stateOption.colorClass ? ` hc-link-state-${stateOption.colorClass}` : '';
+    const commentPreview = truncateCommentPreview(group.resolvedState.comment, 40);
+
+    return `
+      <div class="hc-link-group-header">
+        <button
+          type="button"
+          class="hc-link-group-toggle"
+          data-hc-link-group-toggle
+          aria-expanded="false"
+          aria-label="${escapeHtml(group.label.summaryText)} を展開"
+        >
+          <span class="hc-link-group-indicator"></span>
+          <span class="hc-link-group-label">
+            <span class="hc-link-group-name">${escapeHtml(group.label.name)}</span>
+            <span class="hc-link-group-rent">${escapeHtml(group.label.rent)}</span>
+            <span class="hc-link-group-address">${escapeHtml(group.label.address)}</span>
+            ${group.label.countText ? `<span class="hc-link-group-count">${escapeHtml(group.label.countText)}</span>` : ''}
+          </span>
+        </button>
+        <span class="hc-link-group-header-meta">
+          <span class="hc-link-status">${escapeHtml(group.statusLabel)}</span>
+          <span class="hc-link-state${stateClassName}">${escapeHtml(stateOption.badgeLabel)}</span>
+          ${commentPreview ? `
+            <span class="hc-link-group-comment" title="${escapeHtml(normalizeText(group.resolvedState.comment))}">
+              ${escapeHtml(commentPreview)}
+            </span>
+          ` : ''}
+        </span>
+      </div>
+    `;
+  }
+
+  function renderLinkGroupMemberMarkup(group, listingId) {
+    const record = listingRegistry[listingId] || {};
+    const name = record.name || '物件名不明';
+    const address = record.address || '住所不明';
+    const rent = record.rent || '家賃不明';
+    const detailUrl = record.detailUrl || '';
+    const badgesMarkup = renderLinkMetadataBadges(listingId, record, {
+      showState: false,
+      showCommentInBadges: false,
+      showItemCommentInBadges: true,
+      showEditButton: true
+    });
+    const nameMarkup = detailUrl
+      ? `<a href="${escapeHtml(detailUrl)}" target="_blank" rel="noopener" class="hc-link-name">${escapeHtml(name)}</a>`
+      : `<span class="hc-link-name is-static">${escapeHtml(name)}</span>`;
+
+    return `
+      <div class="hc-link-item ${group.actionValue === 'unlink' ? 'is-linked' : 'is-candidate'}">
+        <span class="hc-link-meta">
+          ${badgesMarkup}
+          <span class="hc-link-summary">
+            ${nameMarkup}
+            <span class="hc-link-rent">${escapeHtml(rent)}</span>
+            <span class="hc-link-address">${escapeHtml(address)}</span>
+          </span>
+        </span>
+        <button
+          type="button"
+          class="hc-link-row-button"
+          data-hc-link-action="${escapeHtml(group.actionValue)}"
+          data-hc-link-id="${escapeHtml(listingId)}"
+        >
+          ${escapeHtml(group.actionLabel)}
+        </button>
+      </div>
+    `;
+  }
+
+  function renderLinkGroupListMarkup(groups, emptyText = '候補はまだありません。') {
+    if (groups.length === 0) {
       return `<p class="hc-link-empty">${escapeHtml(emptyText)}</p>`;
     }
 
-    return rows.map(row => {
-      const record = row.record || {};
-      const resolvedState = getResolvedStateByListingId(row.listingId).state;
-      const commentPreview = truncateCommentPreview(resolvedState.comment, 40);
-      const name = record.name || '物件名不明';
-      const address = record.address || '住所不明';
-      const rent = record.rent || '家賃不明';
-      const detailUrl = record.detailUrl || '';
-      const badgesMarkup = renderLinkMetadataBadges(row.listingId, record, {
-        resolvedState,
-        leadingBadges: [`<span class="hc-link-status">${escapeHtml(row.status)}</span>`],
-        showState: row.actionValue !== 'unlink',
-        showCommentInBadges: false,
-        showItemCommentInBadges: true,
-        showEditButton: true
-      });
-      const commentDetailMarkup = (row.actionValue === 'link' && commentPreview)
-        ? `<span class="hc-link-detail-comment" title="${escapeHtml(normalizeText(resolvedState.comment))}">${escapeHtml(commentPreview)}</span>`
-        : '';
-      const nameMarkup = detailUrl
-        ? `<a href="${escapeHtml(detailUrl)}" target="_blank" rel="noopener" class="hc-link-name">${escapeHtml(name)}</a>`
-        : `<span class="hc-link-name is-static">${escapeHtml(name)}</span>`;
-
+    return groups.map(group => {
       return `
-        <div class="hc-link-item ${row.actionValue === 'unlink' ? 'is-linked' : 'is-candidate'}">
-          <span class="hc-link-meta">
-            ${badgesMarkup}
-            <span class="hc-link-summary">
-              ${nameMarkup}
-              <span class="hc-link-rent">${escapeHtml(rent)}</span>
-              <span class="hc-link-address">${escapeHtml(address)}</span>
-            </span>
-            ${commentDetailMarkup}
-          </span>
-          <button
-            type="button"
-            class="hc-link-row-button"
-            data-hc-link-action="${escapeHtml(row.actionValue)}"
-            data-hc-link-id="${escapeHtml(row.listingId)}"
-          >
-            ${escapeHtml(row.actionLabel)}
-          </button>
+        <div
+          class="hc-link-group ${group.actionValue === 'unlink' ? 'is-linked' : 'is-candidate'}"
+          data-hc-link-group="${escapeHtml(group.domKey)}"
+          data-expanded="0"
+        >
+          ${renderLinkGroupHeaderMarkup(group)}
+          <div class="hc-link-group-body" data-hc-link-group-body>
+            ${group.memberIds.map(listingId => renderLinkGroupMemberMarkup(group, listingId)).join('')}
+          </div>
         </div>
       `;
     }).join('');
   }
 
   function renderLinkListMarkup(card) {
-    const { rows } = buildLinkListRows(card);
-    return renderLinkRowsMarkup(rows);
+    const { groups } = buildLinkListGroups(card);
+    return renderLinkGroupListMarkup(groups);
   }
 
   function renderMaybeLinkListMarkup(card) {
-    return renderLinkRowsMarkup(buildMaybeLinkRows(card), '候補はまだありません。');
+    return renderLinkGroupListMarkup(buildMaybeLinkGroups(card), '候補はまだありません。');
   }
 
   function renderDetailUrlSuggestionsMarkup(card, rawQuery) {
@@ -2008,7 +2111,7 @@
     const panel = currentSite.getPanel(card);
     if (!panel) return;
 
-    const linkCount = buildLinkListRows(card).linkedCount;
+    const linkCount = buildLinkListGroups(card).linkedCount;
     const linkCountElement = panel.querySelector('[data-hc-link-count]');
     const linkListElement = panel.querySelector('[data-hc-link-list]');
     const maybeListElement = panel.querySelector('[data-hc-maybe-list]');
@@ -2050,6 +2153,19 @@
     }
 
     syncLinkPanel(card);
+  }
+
+  function toggleLinkGroup(toggleButton) {
+    const groupElement = toggleButton.closest('[data-hc-link-group]');
+    if (!groupElement) return;
+
+    const label = groupElement.querySelector('.hc-link-group-label')?.textContent || '候補';
+    const isExpanded = toggleButton.getAttribute('aria-expanded') === 'true';
+    const nextExpanded = !isExpanded;
+
+    toggleButton.setAttribute('aria-expanded', String(nextExpanded));
+    toggleButton.setAttribute('aria-label', `${label} を${nextExpanded ? '閉じる' : '展開'}`);
+    groupElement.dataset.expanded = nextExpanded ? '1' : '0';
   }
 
   function refreshCard(card) {
@@ -2371,7 +2487,13 @@
       await flushScheduledPersist(identity.listingId, identity.title);
     });
 
-    const handleLinkActionClick = async event => {
+    const handleGroupedListClick = async event => {
+      const toggleButton = event.target.closest('[data-hc-link-group-toggle]');
+      if (toggleButton) {
+        toggleLinkGroup(toggleButton);
+        return;
+      }
+
       const actionButton = event.target.closest('[data-hc-link-action]');
       if (!actionButton) return;
 
@@ -2382,8 +2504,8 @@
       );
     };
 
-    linkList.addEventListener('click', handleLinkActionClick);
-    maybeList?.addEventListener('click', handleLinkActionClick);
+    linkList.addEventListener('click', handleGroupedListClick);
+    maybeList?.addEventListener('click', handleGroupedListClick);
 
     detailUrlButton.addEventListener('click', async () => {
       await applyDetailUrlLink(card, detailUrlInput);

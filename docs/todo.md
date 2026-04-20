@@ -1,6 +1,10 @@
 # TODO
 
 ## 今回の作業
+- [x] `紐づけ一覧` / `もしかして` の候補表示を `listingId` 羅列からリンクグループ単位の折りたたみ UI へ切り替える。意図: 候補が多いときでも shared state/comment を保ったまま必要なグループだけ確認しやすくするため。
+- [x] `紐づき中` / `リンク` / `もしかして` の各候補で、1 件見つかったらその `effectiveGroupId` に属する掲載をまとめて展開表示する。意図: 候補判定の入口が 1 件でも、実際に連動する掲載全体を見落とさないようにするため。
+- [x] 共有ステータスとまとめコメントをグループヘッダへ寄せ、個別行からは shared comment を外す。意図: グループ共通情報と物件ごとの差分メモの責務を分けて一覧を読みやすくするため。
+- [x] grouped UI の主要フックを smoke に追加し、変更前後で `node ./tests/smoke.js` を実行する。意図: 折りたたみ化で link 操作と候補 UI の主要構造を落とさないため。
 - [x] `athome` 東京一覧を `SITE_CONFIGS` の新規 adapter で追加し、既存 3 サイトと同じ保存・フィルタ・リンク基盤に乗せる。意図: 今後のサイト追加でも既存の site adapter 契約を再利用できるようにするため。
 - [x] `athome` のページャから `次へ` を解決し、後続ページの building block を `Page N` 区切り付きで現在ページへ連結できるようにする。意図: 実ページでも既存サイトと同じ複数ページ連結体験を揃えるため。
 - [x] `athome` の sample fixture、manifest、smoke、storage doc を同じ change で更新する。意図: 実装と再利用可能な検証・運用ドキュメントを同じ前提へ揃えるため。
@@ -58,6 +62,9 @@
 - [x] `紐づけ一覧` の下に `もしかして` を追加し、現掲載または既存リンク名と一致し、住所の先頭数字までが一致する未リンク掲載を出す。意図: fingerprint では拾えない表記揺れ候補を、その場で追加リンクしやすくするため。
 
 ## レビュー
+- [x] grouped UI 着手前に `node ./tests/smoke.js` を実行し、既存 smoke の基準を確認する
+- [x] grouped UI 変更後に `node ./tests/smoke.js` を実行する
+- [ ] 手動で HOME'S / SUUMO 実ページの `紐づき中` / `リンク` / `もしかして` が group 単位で開閉し、shared state/comment がヘッダに残ることを確認する
 - [x] `athome` 対応追加前に `node ./tests/smoke.js` を実行し、既存 smoke の基準を確認する
 - [x] `athome` 用 assertion を追加した smoke を一度 fail させる
 - [x] `athome` 対応追加後の `node ./tests/smoke.js` を実行する
