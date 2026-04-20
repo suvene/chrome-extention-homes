@@ -39,7 +39,10 @@
       itemSelector: 'tr.prg-roomInfo[data-kykey]',
       matches: location =>
         location.hostname === 'www.homes.co.jp'
-        && location.pathname.startsWith('/search/condition1/'),
+        && (
+          location.pathname.startsWith('/search/condition1/')
+          || location.pathname.startsWith('/list/')
+        ),
       getListingId: getHomesCanonicalListingId,
       getLegacyLookupIds: getHomesLookupStorageIds,
       getTitle: getHomesTitle,

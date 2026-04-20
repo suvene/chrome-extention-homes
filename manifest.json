@@ -7,6 +7,7 @@
   "host_permissions": [
     "https://www.homes.co.jp/search/condition-list/*",
     "https://www.homes.co.jp/search/condition1/*",
+    "https://www.homes.co.jp/list/*",
     "https://suumo.jp/jj/chintai/ichiran/FR301FC001/*",
     "https://www.athome.co.jp/chintai/tokyo/list/*"
   ],
@@ -15,6 +16,7 @@
       "matches": [
         "https://www.homes.co.jp/search/condition-list/*",
         "https://www.homes.co.jp/search/condition1/*",
+        "https://www.homes.co.jp/list/*",
         "https://suumo.jp/jj/chintai/ichiran/FR301FC001/*",
         "https://www.athome.co.jp/chintai/tokyo/list/*"
       ],
