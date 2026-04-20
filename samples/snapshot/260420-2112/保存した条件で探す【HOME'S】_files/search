@@ -1,0 +1,68 @@
+cXJsonpCB1(
+{
+    "searchResult": {
+        "pageNumber": 0,
+        "impressionId": "e17dded95e464d62a7682dc8c7c115db",
+        "contentBaseURL": "https://cdn-content-production.cxpublic.com/",
+        "actionBaseURL": "https://adserver.cxad.cxense.com/adserver/action",
+
+        
+        "previous": "",
+                
+        "next": "",
+        
+        "spaces": [
+                        
+            {
+                "id": "000000015bfb1579",
+                "adUnitWidth": 115,
+                "adUnitHeight": 120,
+                "isVerticallyOriented": true,
+                "ads": [
+                                        
+                    {
+                        "id" :"00000001678acd59",
+                        "product": "000000015bfb1405",
+                                                "creative": {
+    "type": "com.cxense.cxad.plugin.imagecreative.feature.ImageCreativeFeature",
+    "id": "0000000167a7a8b9",
+    "templateName": "イメージクリエイティブ テンプレート",
+    "contentServerId": "09379957ee7167ec04e03a88d3d236416efab7ee521d0ee5016dc9c05f0edcad.jpg",
+    "source": "https://cdn-content-production.cxpublic.com/09379957ee7167ec04e03a88d3d236416efab7ee521d0ee5016dc9c05f0edcad.jpg",
+    "description": "",
+    "filename": "バナー_住み替え_PCD.jpg",
+    "spec": {
+        "height": 60,
+        "width": 115
+    },
+    "destinationUrl": "https://www.homes.co.jp/satei/lp/p003/?utm_medium=own&utm_campaign=02_pc_homesadd&cmp_id=02_pc_homesadd"
+    },
+                                                "contextToken": "Yx2svWyKp_K_23m8dCw2-Ref3jenx9GOlTRbhxaCtVLMs9JHwVZrXWQZ-XBe-0gyeonfPuqKD2dP3n6qPjtv7DVxZpHHU4D_Gd9TJmaqR0UZba5E-kdcYwKH3-BpBRI5esuTYnzfteH-bJVngNelckGv_yC5hSAysoNCJ8VLkjQ43_Yls0tWBs-LbwCj94u8EcbOzy6PDu2gnkkFK07WyzZ7dZn9mqugu5V5PjOaFmTxMHF9Dg..",
+                        "clickUrl": "https://s-adserver.cxad.cxense.com/adserver/click/Yx2svWyKp_K_23m8dCw2-Ref3jenx9GOlTRbhxaCtVLMs9JHwVZrXWQZ-XBe-0gyeonfPuqKD2dP3n6qPjtv7DVxZpHHU4D_Gd9TJmaqR0UZba5E-kdcYwKH3-BpBRI5esuTYnzfteH-bJVngNelckGv_yC5hSAysoNCJ8VLkjQ43_Yls0tWBs-LbwCj94u8EcbOzy6PDu2gnkkFK07WyzZ7dZn9mqugu5V5PjOaFmTxMHF9Dg.."
+                                            },                    
+                    {
+                        "id" :"00000001626ad9de",
+                        "product": "000000015c730361",
+                                                "creative": {
+    "type": "com.cxense.cxad.plugin.imagecreative.feature.ImageCreativeFeature",
+    "id": "0000000167096d71",
+    "templateName": "イメージクリエイティブ テンプレート",
+    "contentServerId": "978a7b639115a42329da9acbb0938d3b94bf4b39b79037c61395886d4d41919c.png",
+    "source": "https://cdn-content-production.cxpublic.com/978a7b639115a42329da9acbb0938d3b94bf4b39b79037c61395886d4d41919c.png",
+    "description": "",
+    "filename": "115×60.png",
+    "spec": {
+        "height": 60,
+        "width": 115
+    },
+    "destinationUrl": "https://www.homes.co.jp/hikkoshi/reserve/search/?nx_id=homesad_10_20151106003"
+    },
+                                                "contextToken": "IBnw3rsGhpOhCnxYB1au0FxtPKRXLt8gNm42wu3UZaoXFBvjsXKR0zVjCKmzsINsxzY4xVyoH_qil-JjeRHYYHbu80F595-uRFU2pjwjhKux1xrZRsHBhRgMjUdchmA0HU_9bqs5Alc039GmQ8sIuMyNTAuAu14gcQA70MkESwaYhEjUDuU75H0znDqlvUQDbw3Q5QIIRKbSUQ45KYdAMrvW4lhuhFkCNccsbw..",
+                        "clickUrl": "https://s-adserver.cxad.cxense.com/adserver/click/IBnw3rsGhpOhCnxYB1au0FxtPKRXLt8gNm42wu3UZaoXFBvjsXKR0zVjCKmzsINsxzY4xVyoH_qil-JjeRHYYHbu80F595-uRFU2pjwjhKux1xrZRsHBhRgMjUdchmA0HU_9bqs5Alc039GmQ8sIuMyNTAuAu14gcQA70MkESwaYhEjUDuU75H0znDqlvUQDbw3Q5QIIRKbSUQ45KYdAMrvW4lhuhFkCNccsbw.."
+                                            }                    
+                ]
+            }            
+        ]
+    }
+}
+);
