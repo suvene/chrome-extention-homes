@@ -215,6 +215,14 @@
     return `${chars.slice(0, maxLength).join('')}…`;
   }
 
+  function isComposingEnterKey(event) {
+    return event?.key === 'Enter' && (
+      event.isComposing
+      || event.keyCode === 229
+      || event.which === 229
+    );
+  }
+
   function joinSharedComments(states, defaultTitle = '物件名不明') {
     const comments = [];
     const seenComments = new Set();
@@ -2375,7 +2383,11 @@
         return;
       }
 
-      if (event.key === 'Enter' && event.target.matches('[data-hc-item-comment-input]')) {
+      if (
+        event.key === 'Enter'
+        && !isComposingEnterKey(event)
+        && event.target.matches('[data-hc-item-comment-input]')
+      ) {
         event.preventDefault();
         await saveItemCommentFromModal();
       }
@@ -2584,7 +2596,7 @@
     });
 
     detailUrlInput.addEventListener('keydown', async event => {
-      if (event.key !== 'Enter') return;
+      if (event.key !== 'Enter' || isComposingEnterKey(event)) return;
       event.preventDefault();
       await applyDetailUrlLink(card, detailUrlInput);
     });

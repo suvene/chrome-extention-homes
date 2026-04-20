@@ -29,6 +29,7 @@ const requiredPatterns = [
   'function normalizeAddressText',
   'function normalizeAddressPrefixToFirstNumber',
   'function normalizeRentText',
+  'function isComposingEnterKey',
   'function normalizeDetailUrl',
   'function getLocalFilterStorageKey',
   'function normalizeListingRegistry',
@@ -135,6 +136,10 @@ function checkRequiredPatterns() {
 
   if (!content.includes("comments.join('\\n\\n')")) {
     throw new Error('Shared comments must be joined with a blank line when manual linking merges groups.');
+  }
+
+  if (!content.includes('event.isComposing') || !content.includes('event.keyCode === 229')) {
+    throw new Error('IME composition guard is missing from Enter submit handlers.');
   }
 
   if (!css.includes('.hc-link-toolbar')) {
