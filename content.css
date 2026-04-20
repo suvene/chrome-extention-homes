@@ -328,25 +328,30 @@
 }
 
 .hc-link-group-header {
-  display: flex;
+  display: grid;
   gap: 8px 12px;
-  align-items: flex-start;
-  justify-content: space-between;
-  flex-wrap: wrap;
   padding: 10px;
+}
+
+.hc-link-group-main {
+  display: flex;
+  gap: 8px 10px;
+  align-items: baseline;
+  flex-wrap: wrap;
+  min-width: 0;
+  width: 100%;
 }
 
 .hc-link-group-toggle {
   display: inline-flex;
-  gap: 8px;
   align-items: center;
-  min-width: 0;
   padding: 0;
   border: none;
   background: transparent;
   color: #0f172a;
   cursor: pointer;
   text-align: left;
+  flex: 0 0 auto;
 }
 
 .hc-link-group-indicator {
@@ -398,11 +403,26 @@
 }
 
 .hc-link-group-header-meta {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  flex-wrap: wrap;
+  width: 100%;
+  min-width: 0;
+  justify-content: flex-start;
+}
+
+.hc-link-group-header-badges {
   display: inline-flex;
   gap: 6px;
   align-items: center;
   flex-wrap: wrap;
   min-width: 0;
+}
+
+.hc-link-group-action {
+  margin-left: auto;
+  flex: 0 0 auto;
 }
 
 .hc-link-group-comment {

@@ -69,6 +69,8 @@ const requiredPatterns = [
   'class="hc-link-url-input"',
   'data-hc-link-suggestions',
   'data-hc-link-action',
+  'data-hc-link-group-action',
+  'data-hc-link-group-id',
   'data-hc-link-group-toggle',
   'data-hc-link-group-body',
   'URLでリンク',

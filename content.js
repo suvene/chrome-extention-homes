@@ -1960,25 +1960,41 @@
     const stateOption = getStatusOption(group.resolvedState.color);
     const stateClassName = stateOption.colorClass ? ` hc-link-state-${stateOption.colorClass}` : '';
     const commentPreview = truncateCommentPreview(group.resolvedState.comment, 40);
+    const actionMarkup = group.memberIds.length > 0
+      ? `
+          <button
+            type="button"
+            class="hc-link-row-button hc-link-group-action"
+            data-hc-link-group-action="${escapeHtml(group.actionValue)}"
+            data-hc-link-group-id="${escapeHtml(group.groupId)}"
+          >
+            ${escapeHtml(group.actionLabel)}
+          </button>
+        `
+      : '';
 
     return `
       <div class="hc-link-group-header">
-        <button
-          type="button"
-          class="hc-link-group-toggle"
-          data-hc-link-group-toggle
-          aria-expanded="false"
-          aria-label="${escapeHtml(group.label.summaryText)} を展開"
-        >
-          <span class="hc-link-group-indicator"></span>
+        <span class="hc-link-group-main">
+          <button
+            type="button"
+            class="hc-link-group-toggle"
+            data-hc-link-group-toggle
+            aria-expanded="false"
+            aria-label="${escapeHtml(group.label.summaryText)} を展開"
+          >
+            <span class="hc-link-group-indicator"></span>
+          </button>
           <span class="hc-link-group-label">
             <span class="hc-link-group-name">${escapeHtml(group.label.name)}</span>
             <span class="hc-link-group-rent">${escapeHtml(group.label.rent)}</span>
             <span class="hc-link-group-address">${escapeHtml(group.label.address)}</span>
             ${group.label.countText ? `<span class="hc-link-group-count">${escapeHtml(group.label.countText)}</span>` : ''}
           </span>
-        </button>
+          ${actionMarkup}
+        </span>
         <span class="hc-link-group-header-meta">
+          <span class="hc-link-group-header-badges">
           <span class="hc-link-status">${escapeHtml(group.statusLabel)}</span>
           <span class="hc-link-state${stateClassName}">${escapeHtml(stateOption.badgeLabel)}</span>
           ${commentPreview ? `
@@ -1986,6 +2002,7 @@
               ${escapeHtml(commentPreview)}
             </span>
           ` : ''}
+          </span>
         </span>
       </div>
     `;
@@ -2006,9 +2023,21 @@
     const nameMarkup = detailUrl
       ? `<a href="${escapeHtml(detailUrl)}" target="_blank" rel="noopener" class="hc-link-name">${escapeHtml(name)}</a>`
       : `<span class="hc-link-name is-static">${escapeHtml(name)}</span>`;
+    const actionMarkup = group.actionValue === 'unlink'
+      ? `
+          <button
+            type="button"
+            class="hc-link-row-button"
+            data-hc-link-action="${escapeHtml(group.actionValue)}"
+            data-hc-link-id="${escapeHtml(listingId)}"
+          >
+            ${escapeHtml(group.actionLabel)}
+          </button>
+        `
+      : '';
 
     return `
-      <div class="hc-link-item ${group.actionValue === 'unlink' ? 'is-linked' : 'is-candidate'}">
+      <div class="hc-link-item">
         <span class="hc-link-meta">
           ${badgesMarkup}
           <span class="hc-link-summary">
@@ -2017,14 +2046,7 @@
             <span class="hc-link-address">${escapeHtml(address)}</span>
           </span>
         </span>
-        <button
-          type="button"
-          class="hc-link-row-button"
-          data-hc-link-action="${escapeHtml(group.actionValue)}"
-          data-hc-link-id="${escapeHtml(listingId)}"
-        >
-          ${escapeHtml(group.actionLabel)}
-        </button>
+        ${actionMarkup}
       </div>
     `;
   }
@@ -2254,6 +2276,26 @@
     await applySelectedLinkIds(card, selectedIds);
   }
 
+  async function applyGroupLinkAction(card, targetGroupId, action) {
+    const identity = getCardIdentity(card);
+    const selectedIds = new Set(
+      getLinkedListingIds(identity.listingId).filter(listingId => listingId !== identity.listingId)
+    );
+    const targetListingIds = getGroupMembersByGroupId(targetGroupId).filter(listingId => listingId !== identity.listingId);
+
+    if (action === 'unlink') {
+      targetListingIds.forEach(listingId => {
+        selectedIds.delete(listingId);
+      });
+    } else {
+      targetListingIds.forEach(listingId => {
+        selectedIds.add(listingId);
+      });
+    }
+
+    await applySelectedLinkIds(card, selectedIds);
+  }
+
   function ensureItemCommentModal() {
     let modal = document.querySelector('.hc-modal');
     if (modal) return modal;
@@ -2470,6 +2512,16 @@
       const toggleButton = event.target.closest('[data-hc-link-group-toggle]');
       if (toggleButton) {
         toggleLinkGroup(toggleButton);
+        return;
+      }
+
+      const groupActionButton = event.target.closest('[data-hc-link-group-action]');
+      if (groupActionButton) {
+        await applyGroupLinkAction(
+          card,
+          groupActionButton.getAttribute('data-hc-link-group-id') || '',
+          groupActionButton.getAttribute('data-hc-link-group-action') || ''
+        );
         return;
       }
 
