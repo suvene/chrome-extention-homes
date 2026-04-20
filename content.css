@@ -319,6 +319,133 @@
   box-sizing: border-box;
 }
 
+.hc-link-group {
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #fff;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.hc-link-group-header {
+  display: grid;
+  gap: 8px 12px;
+  padding: 10px;
+}
+
+.hc-link-group-main {
+  display: flex;
+  gap: 8px 10px;
+  align-items: baseline;
+  flex-wrap: wrap;
+  min-width: 0;
+  width: 100%;
+}
+
+.hc-link-group-toggle {
+  display: inline-flex;
+  align-items: center;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: #0f172a;
+  cursor: pointer;
+  text-align: left;
+  flex: 0 0 auto;
+}
+
+.hc-link-group-indicator {
+  width: 8px;
+  height: 8px;
+  margin-left: 2px;
+  border-right: 2px solid #64748b;
+  border-bottom: 2px solid #64748b;
+  transform: rotate(-45deg);
+  transition: transform .16s ease;
+  flex: 0 0 auto;
+}
+
+.hc-link-group-toggle[aria-expanded="true"] .hc-link-group-indicator {
+  transform: rotate(45deg);
+}
+
+.hc-link-group-label {
+  display: inline-flex;
+  gap: 8px 12px;
+  align-items: baseline;
+  flex-wrap: wrap;
+  min-width: 0;
+  color: #334155;
+  line-height: 1.5;
+}
+
+.hc-link-group-name {
+  color: #0f172a;
+  font-weight: 700;
+}
+
+.hc-link-group-rent {
+  color: #b45309;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.hc-link-group-address {
+  color: #475569;
+  font-weight: 400;
+  min-width: 0;
+}
+
+.hc-link-group-count {
+  color: #64748b;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.hc-link-group-header-meta {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  flex-wrap: wrap;
+  width: 100%;
+  min-width: 0;
+  justify-content: flex-start;
+}
+
+.hc-link-group-header-badges {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.hc-link-group-action {
+  margin-left: auto;
+  flex: 0 0 auto;
+}
+
+.hc-link-group-comment {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  max-width: min(32ch, 100%);
+  font-size: 11px;
+  color: #475569;
+  white-space: nowrap;
+}
+
+.hc-link-group-body {
+  display: grid;
+  gap: 8px;
+  padding: 10px 10px 10px 24px;
+  border-top: 1px solid #eef2f7;
+}
+
+.hc-link-group[data-expanded="0"] .hc-link-group-body {
+  display: none;
+}
+
 .hc-filter-checkbox:disabled {
   cursor: not-allowed;
 }
@@ -573,15 +700,6 @@ body.hc-modal-open {
   width: 100%;
   color: #334155;
   line-height: 1.5;
-}
-
-.hc-link-detail-comment {
-  display: inline-flex;
-  align-items: center;
-  min-width: 0;
-  font-size: 11px;
-  color: #64748b;
-  white-space: nowrap;
 }
 
 .hc-link-name {

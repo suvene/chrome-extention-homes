@@ -41,10 +41,13 @@ const requiredPatterns = [
   'function getAthomeNextPageUrl',
   'function getCandidateListingIds',
   'function getMaybeLinkListingIds',
+  'function buildLinkGroupItems',
   'function getDuplicateLinkedListingIdsOnPage',
   'function findListingIdByDetailUrl',
   'function getDetailUrlSuggestions',
   'function renderLinkMetadataBadges',
+  'function renderLinkGroupListMarkup',
+  'function buildDetailUrlSuggestionGroups',
   'function saveItemComment',
   'async function applySelectedLinkIds',
   'async function applyRowLinkAction',
@@ -58,13 +61,18 @@ const requiredPatterns = [
   'class="hc-link-name"',
   'class="hc-link-state',
   'class="hc-link-comment-preview"',
+  'class="hc-link-group',
+  'class="hc-link-group-label"',
   'data-hc-item-comment-label',
   'data-hc-edit-item-comment',
   'data-hc-item-comment-input',
   'class="hc-link-url-input"',
   'data-hc-link-suggestions',
-  'data-hc-suggest-url',
   'data-hc-link-action',
+  'data-hc-link-group-action',
+  'data-hc-link-group-id',
+  'data-hc-link-group-toggle',
+  'data-hc-link-group-body',
   'URLでリンク',
   'もしかして',
   'data-hc-maybe-list',
@@ -131,6 +139,26 @@ function checkRequiredPatterns() {
     throw new Error('Required link item selector is missing from content.css');
   }
 
+  if (!css.includes('.hc-link-group')) {
+    throw new Error('Required link group selector is missing from content.css');
+  }
+
+  if (!css.includes('.hc-link-group-toggle')) {
+    throw new Error('Required link group toggle selector is missing from content.css');
+  }
+
+  if (!css.includes('.hc-link-group-indicator')) {
+    throw new Error('Required link group indicator selector is missing from content.css');
+  }
+
+  if (!css.includes('.hc-link-group-body')) {
+    throw new Error('Required link group body selector is missing from content.css');
+  }
+
+  if (!css.includes('.hc-link-group-comment')) {
+    throw new Error('Required link group comment selector is missing from content.css');
+  }
+
   if (!css.includes('.hc-link-subsection')) {
     throw new Error('Required maybe-link subsection selector is missing from content.css');
   }
@@ -161,10 +189,6 @@ function checkRequiredPatterns() {
 
   if (!css.includes('.hc-link-url-input')) {
     throw new Error('Required detail URL input selector is missing from content.css');
-  }
-
-  if (!css.includes('.hc-link-suggestion-item')) {
-    throw new Error('Required detail URL suggestion selector is missing from content.css');
   }
 
   if (!css.includes('.hc-link-row-button')) {
