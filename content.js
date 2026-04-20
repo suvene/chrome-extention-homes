@@ -215,6 +215,26 @@
     return `${chars.slice(0, maxLength).join('')}…`;
   }
 
+  function joinSharedComments(states, defaultTitle = '物件名不明') {
+    const comments = [];
+    const seenComments = new Set();
+
+    states
+      .map(state => normalizeState(state, defaultTitle))
+      .sort((left, right) => left.updatedAt - right.updatedAt)
+      .forEach(state => {
+        if (!state.comment.trim()) return;
+
+        const normalizedComment = normalizeText(state.comment);
+        if (!normalizedComment || seenComments.has(normalizedComment)) return;
+
+        seenComments.add(normalizedComment);
+        comments.push(state.comment.trim());
+      });
+
+    return comments.join('\n\n');
+  }
+
   function normalizePropertyName(value) {
     return normalizeText(value).toLowerCase();
   }
@@ -1162,6 +1182,22 @@
       id: resolvedId,
       state: resolvedState
     };
+  }
+
+  function getMergedLinkState(ids, defaultTitle) {
+    const resolved = getBestResolvedState(ids, defaultTitle);
+    const linkedStates = ids
+      .map(id => stateCache[id])
+      .filter(Boolean);
+
+    if (linkedStates.length === 0) {
+      return resolved.state;
+    }
+
+    return normalizeState({
+      ...resolved.state,
+      comment: joinSharedComments(linkedStates, defaultTitle)
+    }, defaultTitle);
   }
 
   function getResolvedState(card) {
@@ -2218,7 +2254,7 @@
     });
 
     const nextCurrentGroupList = [...nextCurrentGroupIds];
-    const mergedState = getBestResolvedState(nextCurrentGroupList, identity.title).state;
+    const mergedState = getMergedLinkState(nextCurrentGroupList, identity.title);
     const nextLinkGroups = { ...linkGroupCache };
 
     nextCurrentGroupList.forEach(listingId => {

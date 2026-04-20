@@ -45,6 +45,8 @@ const requiredPatterns = [
   'function getDuplicateLinkedListingIdsOnPage',
   'function findListingIdByDetailUrl',
   'function getDetailUrlSuggestions',
+  'function joinSharedComments',
+  'function getMergedLinkState',
   'function renderLinkMetadataBadges',
   'function renderLinkGroupListMarkup',
   'function buildDetailUrlSuggestionGroups',
@@ -129,6 +131,10 @@ function checkRequiredPatterns() {
 
   if (content.includes('chrome.storage.sync.set(') || content.includes('chrome.storage.sync.remove(')) {
     throw new Error('content.js must not write to chrome.storage.sync anymore.');
+  }
+
+  if (!content.includes("comments.join('\\n\\n')")) {
+    throw new Error('Shared comments must be joined with a blank line when manual linking merges groups.');
   }
 
   if (!css.includes('.hc-link-toolbar')) {
