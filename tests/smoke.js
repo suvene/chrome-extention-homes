@@ -47,6 +47,7 @@ const requiredPatterns = [
   'function getDetailUrlSuggestions',
   'function renderLinkMetadataBadges',
   'function renderLinkGroupListMarkup',
+  'function buildDetailUrlSuggestionGroups',
   'function saveItemComment',
   'async function applySelectedLinkIds',
   'async function applyRowLinkAction',
@@ -67,7 +68,6 @@ const requiredPatterns = [
   'data-hc-item-comment-input',
   'class="hc-link-url-input"',
   'data-hc-link-suggestions',
-  'data-hc-suggest-url',
   'data-hc-link-action',
   'data-hc-link-group-toggle',
   'data-hc-link-group-body',
@@ -187,10 +187,6 @@ function checkRequiredPatterns() {
 
   if (!css.includes('.hc-link-url-input')) {
     throw new Error('Required detail URL input selector is missing from content.css');
-  }
-
-  if (!css.includes('.hc-link-suggestion-item')) {
-    throw new Error('Required detail URL suggestion selector is missing from content.css');
   }
 
   if (!css.includes('.hc-link-row-button')) {

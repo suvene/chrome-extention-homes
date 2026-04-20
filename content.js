@@ -1907,6 +1907,18 @@
     });
   }
 
+  function buildDetailUrlSuggestionGroups(card, rawQuery) {
+    const identity = getCardIdentity(card);
+    const suggestionIds = getDetailUrlSuggestions(identity.listingId, rawQuery).map(suggestion => suggestion.listingId);
+
+    return buildLinkGroupItems(suggestionIds, {
+      currentListingId: identity.listingId,
+      statusLabel: 'リンク候補',
+      actionLabel: 'リンク',
+      actionValue: 'link'
+    });
+  }
+
   function renderLinkMetadataBadges(listingId, record = {}, options = {}) {
     const siteLabel = getSiteLabel(record.site);
     const resolvedState = options.resolvedState || getResolvedStateByListingId(listingId).state;
@@ -2048,50 +2060,17 @@
   }
 
   function renderDetailUrlSuggestionsMarkup(card, rawQuery) {
-    const suggestions = getDetailUrlSuggestions(getCardIdentity(card).listingId, rawQuery);
-
     if (!rawQuery.trim()) {
       return '';
     }
 
-    if (suggestions.length === 0) {
+    const groups = buildDetailUrlSuggestionGroups(card, rawQuery);
+
+    if (groups.length === 0) {
       return '<p class="hc-link-suggestion-empty">一致する候補はありません。</p>';
     }
 
-    return suggestions.map(suggestion => {
-      const record = suggestion.record || {};
-      const name = record.name || '物件名不明';
-      const address = record.address || '住所不明';
-      const rent = record.rent || '家賃不明';
-      const detailUrl = record.detailUrl || '';
-      const badgesMarkup = renderLinkMetadataBadges(suggestion.listingId, record, {
-        showEditButton: false
-      });
-      const nameMarkup = detailUrl
-        ? `<a href="${escapeHtml(detailUrl)}" target="_blank" rel="noopener" class="hc-link-suggestion-name">${escapeHtml(name)}</a>`
-        : `<span class="hc-link-suggestion-name is-static">${escapeHtml(name)}</span>`;
-
-      return `
-        <div class="hc-link-suggestion-item">
-          <span class="hc-link-suggestion-top">
-            ${nameMarkup}
-            <button
-              type="button"
-              class="hc-link-row-button hc-link-suggestion-action"
-              data-hc-suggest-url="${escapeHtml(detailUrl)}"
-            >
-              リンク
-            </button>
-          </span>
-          ${badgesMarkup}
-          <span class="hc-link-suggestion-meta">
-            <span class="hc-link-rent">${escapeHtml(rent)}</span>
-            <span class="hc-link-address">${escapeHtml(address)}</span>
-          </span>
-          <span class="hc-link-suggestion-url">${escapeHtml(detailUrl)}</span>
-        </div>
-      `;
-    }).join('');
+    return renderLinkGroupListMarkup(groups, '一致する候補はありません。');
   }
 
   function syncDetailUrlSuggestions(card) {
@@ -2506,6 +2485,7 @@
 
     linkList.addEventListener('click', handleGroupedListClick);
     maybeList?.addEventListener('click', handleGroupedListClick);
+    detailUrlSuggestions.addEventListener('click', handleGroupedListClick);
 
     detailUrlButton.addEventListener('click', async () => {
       await applyDetailUrlLink(card, detailUrlInput);
@@ -2518,14 +2498,6 @@
     detailUrlInput.addEventListener('keydown', async event => {
       if (event.key !== 'Enter') return;
       event.preventDefault();
-      await applyDetailUrlLink(card, detailUrlInput);
-    });
-
-    detailUrlSuggestions.addEventListener('click', async event => {
-      const suggestionButton = event.target.closest('[data-hc-suggest-url]');
-      if (!suggestionButton) return;
-
-      detailUrlInput.value = suggestionButton.getAttribute('data-hc-suggest-url') || '';
       await applyDetailUrlLink(card, detailUrlInput);
     });
 
