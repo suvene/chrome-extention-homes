@@ -269,6 +269,7 @@ function checkManifestSupport() {
   console.log('Checking manifest matches and metadata...');
 
   const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+  const homesListMatch = 'https://www.homes.co.jp/list/*';
   const expectedMatch = 'https://suumo.jp/jj/chintai/ichiran/FR301FC001/*';
   const athomeMatch = 'https://www.athome.co.jp/chintai/tokyo/list/*';
 
@@ -284,17 +285,35 @@ function checkManifestSupport() {
     throw new Error('Manifest host permissions do not include the SUUMO list URL.');
   }
 
+  if (!manifest.host_permissions.includes(homesListMatch)) {
+    throw new Error('Manifest host permissions do not include the HOME\'S /list/ URL.');
+  }
+
   if (!manifest.host_permissions.includes(athomeMatch)) {
     throw new Error('Manifest host permissions do not include the athome list URL.');
   }
 
   const matches = manifest.content_scripts.flatMap(script => script.matches || []);
+  if (!matches.includes(homesListMatch)) {
+    throw new Error('Content script matches do not include the HOME\'S /list/ URL.');
+  }
+
   if (!matches.includes(expectedMatch)) {
     throw new Error('Content script matches do not include the SUUMO list URL.');
   }
 
   if (!matches.includes(athomeMatch)) {
     throw new Error('Content script matches do not include the athome list URL.');
+  }
+}
+
+function checkHomesListRoutingSupport() {
+  console.log('Checking HOME\'S /list/ routing support...');
+
+  const content = fs.readFileSync(contentPath, 'utf8');
+
+  if (!content.includes("location.pathname.startsWith('/list/')")) {
+    throw new Error('HOME\'S condition1 matcher does not support the /list/ URL.');
   }
 }
 
@@ -383,6 +402,7 @@ function main() {
   checkRequiredPatterns();
   checkExportFilenameConvention();
   checkManifestSupport();
+  checkHomesListRoutingSupport();
   checkSampleFixtures();
   checkStorageDocVersion();
   console.log('Smoke checks passed.');
