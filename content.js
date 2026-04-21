@@ -3129,9 +3129,6 @@
       subtree: true
     });
 
-    void loadNextPages().catch(error => {
-      console.error('Failed to load next pages', error);
-    });
   }
 
   init();
