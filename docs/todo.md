@@ -1,6 +1,9 @@
 # TODO
 
 ## 今回の作業
+- [x] `Canary` 東京一覧を `SITE_CONFIGS` の新規 adapter で追加し、既存サイトと同じ保存・フィルタ・リンク基盤に乗せる。意図: `web.canary-app.jp/chintai/tokyo/list/` でも同じメモ運用を継続できるようにするため。
+- [x] `Canary` の `Masonry` 2列一覧をデスクトップだけ 1列・約980px へ正規化し、元の表示順を保つ。意図: CSS だけでは `1,3,5... / 2,4,6...` に崩れるため、DOM 順も含めて安定化するため。
+- [x] `Canary` の sample fixture、manifest、smoke、storage doc を同じ change で更新する。意図: 実装と再利用可能な検証・運用ドキュメントを同じ前提へ揃えるため。
 - [x] `https://www.homes.co.jp/list/` を `condition1` と同じ site 判定・manifest 対象へ追加する。意図: HOME'S の別URLでも同じコメント・絞り込み UI を確実に有効化するため。
 - [x] `URLでリンク` 入力欄と個別コメント入力で、IME 変換中の `Enter` では submit しないようにする。意図: 日本語確定時の `Enter` をリンク実行や保存として誤解釈しないようにするため。
 - [x] `HOME'S condition1` の検索結果 bundle 幅を少し広げ、画像・条件・チェック列が窮屈になりにくいよう調整する。意図: 拡張の UI を足したあとも、元サイトの一覧テーブルを無理なく読める横幅を確保するため。
@@ -70,6 +73,9 @@
 - [x] `紐づけ一覧` の下に `もしかして` を追加し、現掲載または既存リンク名と一致し、住所の先頭数字までが一致する未リンク掲載を出す。意図: fingerprint では拾えない表記揺れ候補を、その場で追加リンクしやすくするため。
 
 ## レビュー
+- [x] `Canary` 対応追加前に `node ./tests/smoke.js` を実行し、既存 smoke の基準を確認する
+- [x] `Canary` 対応追加後の `node ./tests/smoke.js` を実行する
+- [ ] 手動で `Canary` 実ページの表示、保存、filter、1列化、pagination 連結を確認する
 - [x] IME `Enter` ガード追加後の `node ./tests/smoke.js` を実行する
 - [ ] 手動で `URLでリンク` 入力欄に日本語を入力して確定しても、エラーメッセージを出さずそのまま入力継続できることを確認する
 - [ ] `HOME'S condition1` 実ページで、画像・条件列・チェック列の横詰まりが軽減され、横スクロールや崩れが出ないことを手動確認する
