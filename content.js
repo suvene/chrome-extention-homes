@@ -10,7 +10,16 @@
   const ITEM_COMMENT_MAX_LENGTH = 80;
   const REGISTRY_PERSIST_DEBOUNCE_MS = 400;
   const EXPORT_FILENAME_PREFIX = 'rent-condition-notes';
+  const DEBUG_EXPORT_FILENAME_PREFIX = 'rent-condition-debug';
   const APP_TITLE = '賃貸物件 条件一覧アシスタント';
+  const DEBUG_TOOLS_ENABLED = false;
+  const DIAGNOSTIC_LOG_STORAGE_KEY = 'hc_debug_log_v1';
+  const DIAGNOSTIC_LOG_MAX_ENTRIES = 200;
+  const DIAGNOSTIC_FLUSH_DEBOUNCE_MS = 400;
+  const SCAN_DEBOUNCE_MS = 120;
+  const OBSERVER_BURST_WINDOW_MS = 5000;
+  const OBSERVER_BURST_LIMIT = 150;
+  const OBSERVER_RECOVERY_DELAY_MS = 2000;
   const STATUS_OPTIONS = [
     { value: '0', label: '0. 未検討', badgeLabel: '0. 未検討', colorClass: '', defaultChecked: true },
     { value: '1', label: '1. 要確認', badgeLabel: '1. 要確認', colorClass: 'orange', defaultChecked: true },
@@ -136,6 +145,32 @@
       getNextPageUrl: getAthomeNextPageUrl,
       getPageLabel: getAthomePageLabel,
       createPageSeparator: createDefaultPageSeparator
+    },
+    {
+      id: 'canary-tokyo-list',
+      label: 'Canary',
+      itemSelector: '.hc-canary-column a[data-testid="search-result-room-thumbail"][href^="/chintai/rooms/"]',
+      matches: location =>
+        location.hostname === 'web.canary-app.jp'
+        && location.pathname === '/chintai/tokyo/list/',
+      getListingId: getCanaryCanonicalListingId,
+      getLegacyLookupIds: getCanaryLookupStorageIds,
+      getTitle: getCanaryTitle,
+      getName: getCanaryName,
+      getAddress: getCanaryAddress,
+      getRent: getCanaryRent,
+      getDetailUrl: getCanaryDetailUrl,
+      getDecoratedElements: getCanaryDecoratedElements,
+      getPanel: getCanaryPanel,
+      mountPanel: mountCanaryPanel,
+      getBuildingContainer: getCanaryBuildingContainer,
+      getContainerCards: getCanaryContainerCards,
+      getBundle: getCanaryBundle,
+      getBuildingBlocks: getCanaryBuildingBlocks,
+      getNextPageUrl: getCanaryNextPageUrl,
+      getPageLabel: getCanaryPageLabel,
+      createPageSeparator: createDefaultPageSeparator,
+      normalizeBundleLayout: normalizeCanaryBundleLayout
     }
   ];
   const currentSite = detectCurrentSite();
@@ -146,9 +181,362 @@
   const commentSaveTimers = new Map();
   let isNextPageLoading = false;
   let registryPersistTimerId = 0;
+  let diagnosticLogQueue = [];
+  let diagnosticFlushTimerId = 0;
+  let diagnosticSequence = 0;
+  let scanRunCount = 0;
+  let observerEventCount = 0;
+  let scanTimerId = 0;
+  let scanQueuedWhileRunning = false;
+  let scanPendingReason = 'init';
+  let scanPendingDetail = null;
+  let isScanRunning = false;
+  let observer = null;
+  let observerSuspended = true;
+  let observerRecoveryTimerId = 0;
+  let observerMutationTimestamps = [];
+  let activeCompositionCount = 0;
+  let compositionDeferLogged = false;
+
+  function readDiagnosticLogEntries() {
+    if (!DEBUG_TOOLS_ENABLED) {
+      return [];
+    }
+
+    try {
+      const raw = window.localStorage.getItem(DIAGNOSTIC_LOG_STORAGE_KEY);
+      const parsed = raw ? JSON.parse(raw) : [];
+      return Array.isArray(parsed) ? parsed : [];
+    } catch (error) {
+      return [{ error: `Failed to parse ${DIAGNOSTIC_LOG_STORAGE_KEY}: ${error.message}` }];
+    }
+  }
+
+  function writeBootstrapDiagnostic(event, detail = {}) {
+    if (!DEBUG_TOOLS_ENABLED) {
+      return;
+    }
+
+    try {
+      diagnosticSequence += 1;
+      const entries = readDiagnosticLogEntries().filter(entry => !entry?.error);
+      entries.push({
+        seq: diagnosticSequence,
+        at: new Date().toISOString(),
+        site: currentSite?.id || '',
+        event,
+        detail
+      });
+      window.localStorage.setItem(
+        DIAGNOSTIC_LOG_STORAGE_KEY,
+        JSON.stringify(entries.slice(-DIAGNOSTIC_LOG_MAX_ENTRIES))
+      );
+    } catch (error) {
+      console.warn('Failed to write bootstrap diagnostic', error);
+    }
+  }
+
+  function installEarlyDiagnosticHelpers() {
+    if (!DEBUG_TOOLS_ENABLED) {
+      return;
+    }
+
+    window.__HC_DEBUG__ = {
+      read() {
+        return readDiagnosticLogEntries();
+      },
+      clear() {
+        diagnosticLogQueue = [];
+        if (diagnosticFlushTimerId) {
+          window.clearTimeout(diagnosticFlushTimerId);
+          diagnosticFlushTimerId = 0;
+        }
+        window.localStorage.removeItem(DIAGNOSTIC_LOG_STORAGE_KEY);
+      },
+      resumeObserver() {
+        observerMutationTimestamps = [];
+        reconnectObserver?.();
+      }
+    };
+
+    window.addEventListener('error', event => {
+      writeBootstrapDiagnostic('runtime.error', {
+        message: event.message || '',
+        filename: event.filename || '',
+        lineno: event.lineno || 0,
+        colno: event.colno || 0
+      });
+    });
+
+    window.addEventListener('unhandledrejection', event => {
+      writeBootstrapDiagnostic('runtime.unhandledrejection', {
+        reason: event.reason instanceof Error ? event.reason.message : String(event.reason || '')
+      });
+    });
+  }
+
+  installEarlyDiagnosticHelpers();
 
   if (!currentSite) {
+    writeBootstrapDiagnostic('site.unmatched', {
+      url: window.location.href
+    });
     return;
+  }
+
+  function flushDiagnosticLog() {
+    if (!DEBUG_TOOLS_ENABLED) {
+      diagnosticFlushTimerId = 0;
+      diagnosticLogQueue = [];
+      return;
+    }
+
+    diagnosticFlushTimerId = 0;
+
+    if (diagnosticLogQueue.length === 0) {
+      return;
+    }
+
+    try {
+      const existingRaw = window.localStorage.getItem(DIAGNOSTIC_LOG_STORAGE_KEY);
+      const existing = existingRaw ? JSON.parse(existingRaw) : [];
+      const nextEntries = Array.isArray(existing) ? existing : [];
+
+      nextEntries.push(...diagnosticLogQueue);
+      const trimmedEntries = nextEntries.slice(-DIAGNOSTIC_LOG_MAX_ENTRIES);
+      window.localStorage.setItem(DIAGNOSTIC_LOG_STORAGE_KEY, JSON.stringify(trimmedEntries));
+      diagnosticLogQueue = [];
+    } catch (error) {
+      console.warn('Failed to flush diagnostic log', error);
+      diagnosticLogQueue = [];
+    }
+  }
+
+  function scheduleDiagnosticFlush() {
+    if (!DEBUG_TOOLS_ENABLED) return;
+    if (diagnosticFlushTimerId) return;
+
+    diagnosticFlushTimerId = window.setTimeout(() => {
+      flushDiagnosticLog();
+    }, DIAGNOSTIC_FLUSH_DEBOUNCE_MS);
+  }
+
+  function sanitizeDiagnosticDetail(detail) {
+    if (!detail || typeof detail !== 'object' || Array.isArray(detail)) {
+      return detail;
+    }
+
+    return Object.fromEntries(
+      Object.entries(detail).map(([key, value]) => {
+        if (value instanceof Error) {
+          return [key, value.message];
+        }
+
+        if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean' || value == null) {
+          return [key, value];
+        }
+
+        return [key, JSON.stringify(value)];
+      })
+    );
+  }
+
+  function recordDiagnostic(event, detail = {}) {
+    if (!DEBUG_TOOLS_ENABLED) {
+      return;
+    }
+
+    diagnosticSequence += 1;
+    diagnosticLogQueue.push({
+      seq: diagnosticSequence,
+      at: new Date().toISOString(),
+      site: currentSite?.id || '',
+      event,
+      detail: sanitizeDiagnosticDetail(detail)
+    });
+    scheduleDiagnosticFlush();
+  }
+
+  function exposeDiagnosticHelpers() {
+    if (!DEBUG_TOOLS_ENABLED) {
+      return;
+    }
+
+    window.__HC_DEBUG__ = {
+      read() {
+        try {
+          return JSON.parse(window.localStorage.getItem(DIAGNOSTIC_LOG_STORAGE_KEY) || '[]');
+        } catch (error) {
+          return [{ error: `Failed to parse ${DIAGNOSTIC_LOG_STORAGE_KEY}: ${error.message}` }];
+        }
+      },
+      clear() {
+        diagnosticLogQueue = [];
+        if (diagnosticFlushTimerId) {
+          window.clearTimeout(diagnosticFlushTimerId);
+          diagnosticFlushTimerId = 0;
+        }
+        window.localStorage.removeItem(DIAGNOSTIC_LOG_STORAGE_KEY);
+      },
+      resumeObserver() {
+        observerMutationTimestamps = [];
+        reconnectObserver();
+      }
+    };
+  }
+
+  function getMutationSummary(mutations) {
+    return {
+      mutations: mutations.length,
+      addedNodes: mutations.reduce((count, mutation) => count + mutation.addedNodes.length, 0),
+      removedNodes: mutations.reduce((count, mutation) => count + mutation.removedNodes.length, 0)
+    };
+  }
+
+  function disconnectObserver() {
+    if (!observer || observerSuspended) return;
+    observer.disconnect();
+    observerSuspended = true;
+  }
+
+  function reconnectObserver() {
+    if (!observer || !observerSuspended) return;
+    observer.observe(document.body, {
+      childList: true,
+      subtree: true
+    });
+    observerSuspended = false;
+    recordDiagnostic('observer.resumed', {
+      pathname: window.location.pathname
+    });
+  }
+
+  function temporarilySuspendObserver(reason, detail = {}) {
+    disconnectObserver();
+    recordDiagnostic(reason, detail);
+    flushDiagnosticLog();
+
+    if (observerRecoveryTimerId) {
+      window.clearTimeout(observerRecoveryTimerId);
+    }
+
+    observerRecoveryTimerId = window.setTimeout(() => {
+      observerRecoveryTimerId = 0;
+      reconnectObserver();
+      scheduleScan('observer.resume.scan');
+    }, OBSERVER_RECOVERY_DELAY_MS);
+  }
+
+  function scheduleScan(reason = 'unknown', detail = null) {
+    scanPendingReason = reason;
+    scanPendingDetail = detail;
+
+    if (isScanRunning) {
+      scanQueuedWhileRunning = true;
+      return;
+    }
+
+    if (scanTimerId) {
+      return;
+    }
+
+    scanTimerId = window.setTimeout(() => {
+      scanTimerId = 0;
+      void runScheduledScan();
+    }, SCAN_DEBOUNCE_MS);
+  }
+
+  function isCompositionActive() {
+    return activeCompositionCount > 0;
+  }
+
+  function attachCompositionGuards(element, label = '') {
+    if (!element || element.dataset.hcCompositionGuard === '1') {
+      return;
+    }
+
+    element.dataset.hcCompositionGuard = '1';
+
+    element.addEventListener('compositionstart', () => {
+      activeCompositionCount += 1;
+      compositionDeferLogged = false;
+      recordDiagnostic('composition.start', {
+        label,
+        activeCount: activeCompositionCount
+      });
+    });
+
+    element.addEventListener('compositionend', () => {
+      activeCompositionCount = Math.max(0, activeCompositionCount - 1);
+      compositionDeferLogged = false;
+      recordDiagnostic('composition.end', {
+        label,
+        activeCount: activeCompositionCount
+      });
+
+      if (!isCompositionActive() && (scanPendingReason !== 'idle' || scanPendingDetail || scanQueuedWhileRunning)) {
+        scheduleScan('composition.end.resume');
+      }
+    });
+  }
+
+  async function runScheduledScan() {
+    if (isScanRunning) {
+      scanQueuedWhileRunning = true;
+      return;
+    }
+
+    if (isCompositionActive()) {
+      if (!compositionDeferLogged) {
+        compositionDeferLogged = true;
+        recordDiagnostic('scan.deferred.composition', {
+          pendingReason: scanPendingReason,
+          pathname: window.location.pathname
+        });
+      }
+      scheduleScan('composition.defer');
+      return;
+    }
+
+    const reason = scanPendingReason;
+    const detail = scanPendingDetail;
+    scanPendingReason = 'idle';
+    scanPendingDetail = null;
+
+    isScanRunning = true;
+    const interactionSnapshot = getInteractionSnapshot();
+    disconnectObserver();
+
+    try {
+      scanRunCount += 1;
+      recordDiagnostic('scan.start', {
+        run: scanRunCount,
+        reason,
+        pathname: window.location.pathname,
+        cardsBefore: document.querySelectorAll(currentSite.itemSelector).length,
+        ...(detail || {})
+      });
+      currentSite.normalizeBundleLayout?.();
+      createToolbar();
+      document.querySelectorAll(currentSite.itemSelector).forEach(enhanceCard);
+      filterCards();
+      updateToolbarSummary();
+      recordDiagnostic('scan.end', {
+        run: scanRunCount,
+        reason,
+        cardsAfter: document.querySelectorAll(currentSite.itemSelector).length,
+        panels: document.querySelectorAll('.hc-panel').length
+      });
+    } finally {
+      isScanRunning = false;
+      reconnectObserver();
+      restoreInteractionSnapshot(interactionSnapshot);
+
+      if (scanQueuedWhileRunning || scanPendingReason !== 'idle' || scanPendingDetail) {
+        scanQueuedWhileRunning = false;
+        scheduleScan('scan.requeued');
+      }
+    }
   }
 
   async function loadAll() {
@@ -621,6 +1009,165 @@
       console.warn('Failed to resolve athome detail URL', error);
       return '';
     }
+  }
+
+  function parseCanaryRoomIdFromHref(href) {
+    if (typeof href !== 'string' || !href.trim()) return '';
+
+    const match = href.match(/\/chintai\/rooms\/([^/?#]+)\/?/);
+    return match?.[1] || '';
+  }
+
+  function parseCanaryBuildingIdFromHref(href) {
+    if (typeof href !== 'string' || !href.trim()) return '';
+
+    const match = href.match(/\/chintai\/buildings\/([^/?#]+)\/?/);
+    return match?.[1] || '';
+  }
+
+  function getCanaryBuildingLink(card) {
+    return getCanaryBuildingRoot(card)?.querySelector('a[href^="/chintai/buildings/"]') || null;
+  }
+
+  function getCanaryBuildingSummaryLink(card) {
+    return [...(getCanaryBuildingRoot(card)?.querySelectorAll('a[href^="/chintai/rooms/"]') || [])]
+      .find(link => link.getAttribute('data-testid') !== 'search-result-room-thumbail') || null;
+  }
+
+  function getCanaryLeafText(root, selector) {
+    return [...(root?.querySelectorAll(selector) || [])]
+      .filter(element => !element.querySelector(selector))
+      .map(element => normalizeSpaces(element.textContent || ''))
+      .find(Boolean) || '';
+  }
+
+  function getCanaryLeafTexts(root, selector) {
+    return [...(root?.querySelectorAll(selector) || [])]
+      .filter(element => !element.querySelector(selector))
+      .map(element => normalizeSpaces(element.textContent || ''))
+      .filter(Boolean);
+  }
+
+  function getCanaryRoomWrapper(card) {
+    const body = card?.ownerDocument?.body || document.body;
+    let current = card?.parentElement || null;
+
+    while (current && current !== body) {
+      const roomCards = current.querySelectorAll('a[data-testid="search-result-room-thumbail"][href^="/chintai/rooms/"]');
+      if (roomCards.length === 1 && roomCards[0] === card) {
+        current.classList.add('hc-canary-room');
+        return current;
+      }
+      current = current.parentElement;
+    }
+
+    const wrapper = card?.parentElement || card;
+    wrapper?.classList?.add('hc-canary-room');
+    return wrapper;
+  }
+
+  function getCanaryBuildingRoot(card) {
+    const body = card?.ownerDocument?.body || document.body;
+    let current = getCanaryRoomWrapper(card);
+
+    while (current && current !== body) {
+      const hasBuildingLink = !!current.querySelector('a[href^="/chintai/buildings/"]');
+      const roomCards = current.querySelectorAll('a[data-testid="search-result-room-thumbail"][href^="/chintai/rooms/"]');
+
+      if (hasBuildingLink && roomCards.length > 0 && [...roomCards].includes(card)) {
+        current.classList.add('hc-canary-building');
+        return current;
+      }
+
+      current = current.parentElement;
+    }
+
+    return getCanaryRoomWrapper(card);
+  }
+
+  function getCanaryBuildingBlockFromLink(link) {
+    const body = link?.ownerDocument?.body || document.body;
+    let current = link?.parentElement || null;
+
+    while (current && current !== body) {
+      const hasBuildingLink = current.querySelector('a[href^="/chintai/buildings/"]') === link;
+      const hasRoomCards = current.querySelectorAll('a[data-testid="search-result-room-thumbail"][href^="/chintai/rooms/"]').length > 0;
+
+      if (hasBuildingLink && hasRoomCards) {
+        current.classList.add('hc-canary-building');
+        return current;
+      }
+
+      current = current.parentElement;
+    }
+
+    return link?.parentElement || link;
+  }
+
+  function getCanaryCanonicalListingId(card) {
+    const roomId = parseCanaryRoomIdFromHref(card?.getAttribute('href'));
+    return roomId ? `canary-room:${roomId}` : '';
+  }
+
+  function getCanaryLookupStorageIds(card) {
+    const ids = [];
+    const canonicalId = getCanaryCanonicalListingId(card);
+    const detailUrl = getCanaryDetailUrl(card);
+
+    pushUnique(ids, canonicalId);
+    pushUnique(ids, detailUrl ? `canary-href:${detailUrl}` : '');
+
+    return ids;
+  }
+
+  function getCanaryName(card) {
+    return normalizeSpaces(getCanaryBuildingLink(card)?.querySelector('p')?.textContent || '');
+  }
+
+  function getCanaryTitle(card) {
+    const name = getCanaryName(card);
+    if (name) return name;
+
+    const roomLabel = normalizeSpaces(
+      getCanaryLeafText(card, 'div')
+      || card?.textContent
+      || ''
+    );
+
+    return roomLabel || '物件名不明';
+  }
+
+  function getCanaryAddress(card) {
+    const texts = getCanaryLeafTexts(getCanaryBuildingSummaryLink(card), 'div');
+    return texts.at(-1) || '';
+  }
+
+  function getCanaryRent(card) {
+    const match = normalizeSpaces(card?.textContent || '').match(/([0-9]+(?:\.[0-9]+)?)\s*万円/);
+    return match ? `${match[1]}万円` : '';
+  }
+
+  function getCanaryDetailUrl(card) {
+    const href = card?.getAttribute('href') || '';
+    if (!href) return '';
+
+    try {
+      return new URL(href, window.location.href).href;
+    } catch (error) {
+      console.warn('Failed to resolve Canary detail URL', error);
+      return '';
+    }
+  }
+
+  function getCanaryDecoratedElements(card) {
+    return [getCanaryRoomWrapper(card)];
+  }
+
+  function getCanaryPanel(card) {
+    const wrapper = getCanaryRoomWrapper(card);
+    const nextPanel = card?.nextElementSibling;
+    if (nextPanel?.classList?.contains('hc-panel')) return nextPanel;
+    return wrapper?.querySelector('.hc-panel') || null;
   }
 
   function buildCardIdentity(card) {
@@ -1350,6 +1897,10 @@
     return `${EXPORT_FILENAME_PREFIX}-${formatExportTimestamp(new Date(timestamp))}.json`;
   }
 
+  function getDebugExportFilename(timestamp = Date.now()) {
+    return `${DEBUG_EXPORT_FILENAME_PREFIX}-${formatExportTimestamp(new Date(timestamp))}.json`;
+  }
+
   function parseImportPayload(parsedJson) {
     if (
       parsedJson
@@ -1403,6 +1954,102 @@
     const lastUpdatedAt = getLastUpdatedAt();
     const filenameTimestamp = lastUpdatedAt > 0 ? lastUpdatedAt : Date.now();
     downloadJson(getExportFilename(filenameTimestamp), buildExportPayload());
+  }
+
+  function buildDebugExportPayload() {
+    return {
+      schemaVersion: 1,
+      exportedAt: Date.now(),
+      currentUrl: window.location.href,
+      currentPath: window.location.pathname,
+      userAgent: window.navigator.userAgent,
+      site: currentSite?.id || '',
+      observer: {
+        eventCount: observerEventCount,
+        suspended: observerSuspended,
+        recentBurstCount: observerMutationTimestamps.length
+      },
+      scan: {
+        runCount: scanRunCount,
+        isRunning: isScanRunning,
+        queuedWhileRunning: scanQueuedWhileRunning,
+        pendingReason: scanPendingReason
+      },
+      dom: {
+        cards: currentSite ? document.querySelectorAll(currentSite.itemSelector).length : 0,
+        panels: document.querySelectorAll('.hc-panel').length,
+        toolbars: document.querySelectorAll('.hc-toolbar').length
+      },
+      diagnostics: readDiagnosticLogEntries()
+    };
+  }
+
+  async function exportDebugJson() {
+    flushDiagnosticLog();
+    const filenameTimestamp = Date.now();
+    downloadJson(getDebugExportFilename(filenameTimestamp), buildDebugExportPayload());
+  }
+
+  function escapeAttribute(value) {
+    return String(value)
+      .replaceAll('\\', '\\\\')
+      .replaceAll('"', '\\"');
+  }
+
+  function getInteractionSnapshot() {
+    const activeElement = document.activeElement;
+    const snapshot = {
+      scrollX: window.scrollX,
+      scrollY: window.scrollY
+    };
+
+    if (!activeElement || !(activeElement instanceof HTMLElement)) {
+      return snapshot;
+    }
+
+    if (activeElement.matches('.hc-comment, .hc-link-url-input, [data-hc-item-comment-input]')) {
+      snapshot.selector = activeElement.matches('.hc-comment')
+        ? '.hc-comment'
+        : activeElement.matches('.hc-link-url-input')
+          ? '.hc-link-url-input'
+          : '[data-hc-item-comment-input]';
+      snapshot.listingId = activeElement.closest('.hc-panel')?.getAttribute('data-hc-listing-id') || '';
+      snapshot.selectionStart = typeof activeElement.selectionStart === 'number' ? activeElement.selectionStart : null;
+      snapshot.selectionEnd = typeof activeElement.selectionEnd === 'number' ? activeElement.selectionEnd : null;
+    }
+
+    return snapshot;
+  }
+
+  function restoreInteractionSnapshot(snapshot) {
+    if (!snapshot) return;
+
+    if (typeof snapshot.scrollX === 'number' && typeof snapshot.scrollY === 'number') {
+      window.scrollTo(snapshot.scrollX, snapshot.scrollY);
+    }
+
+    if (!snapshot.selector) {
+      return;
+    }
+
+    let target = null;
+
+    if (snapshot.selector === '[data-hc-item-comment-input]') {
+      target = document.querySelector(snapshot.selector);
+    } else if (snapshot.listingId) {
+      const panel = document.querySelector(`.hc-panel[data-hc-listing-id="${escapeAttribute(snapshot.listingId)}"]`);
+      target = panel?.querySelector(snapshot.selector) || null;
+    }
+
+    if (!target || !(target instanceof HTMLElement)) {
+      return;
+    }
+
+    target.focus({ preventScroll: true });
+    if (typeof target.setSelectionRange === 'function' && snapshot.selectionStart != null && snapshot.selectionEnd != null) {
+      target.setSelectionRange(snapshot.selectionStart, snapshot.selectionEnd);
+    }
+    window.scrollTo(snapshot.scrollX, snapshot.scrollY);
   }
 
   async function importJson(file) {
@@ -1587,6 +2234,10 @@
     return root.querySelector('.p-result__main');
   }
 
+  function getCanaryBundle(root = document) {
+    return root.querySelector('.Masonry_Container');
+  }
+
   function getHomesCondition1BuildingBlocks(bundle) {
     if (!bundle) return [];
 
@@ -1609,6 +2260,83 @@
     if (!bundle) return [];
 
     return [...bundle.children].filter(child => child.matches('.p-property.p-property--building.js-block'));
+  }
+
+  function getCanaryPageData(root = document) {
+    const script = root.querySelector('#__NEXT_DATA__');
+    const rawJson = script?.textContent?.trim();
+    if (!rawJson) return null;
+
+    try {
+      return JSON.parse(rawJson);
+    } catch (error) {
+      console.warn('Failed to parse Canary __NEXT_DATA__', error);
+      return null;
+    }
+  }
+
+  function getCanarySearchEstatesResponse(root = document) {
+    return getCanaryPageData(root)?.props?.pageProps?.initialSearchEstatesResponse || null;
+  }
+
+  function getCanaryPageBuildingIds(root = document) {
+    return (getCanarySearchEstatesResponse(root)?.estatesList || [])
+      .map(estate => typeof estate?.id === 'string' ? estate.id : '')
+      .filter(Boolean);
+  }
+
+  function isCanaryHiddenTemplateNode(node, boundary) {
+    let current = node;
+
+    while (current && current !== boundary) {
+      const style = current.getAttribute?.('style') || '';
+      if (style.includes('contain:layout style') && style.includes('position:absolute')) {
+        return true;
+      }
+      current = current.parentElement;
+    }
+
+    return false;
+  }
+
+  function getCanaryRenderedBuildingBlockMap(bundle) {
+    const blockMap = new Map();
+
+    [...bundle.querySelectorAll('a[href^="/chintai/buildings/"]')].forEach(link => {
+      if (isCanaryHiddenTemplateNode(link, bundle)) return;
+
+      const buildingId = parseCanaryBuildingIdFromHref(link.getAttribute('href'));
+      if (!buildingId || blockMap.has(buildingId)) return;
+
+      const block = getCanaryBuildingBlockFromLink(link);
+      if (!block) return;
+
+      block.classList.add('hc-canary-building');
+      blockMap.set(buildingId, block);
+    });
+
+    return blockMap;
+  }
+
+  function getCanaryBuildingBlocks(bundle) {
+    if (!bundle) return [];
+
+    const blockMap = getCanaryRenderedBuildingBlockMap(bundle);
+    const orderedIds = getCanaryPageBuildingIds(bundle.ownerDocument);
+    const seenIds = new Set();
+    const orderedBlocks = orderedIds.reduce((blocks, buildingId) => {
+      const block = blockMap.get(buildingId);
+      if (!block) return blocks;
+
+      seenIds.add(buildingId);
+      blocks.push(block);
+      return blocks;
+    }, []);
+    const remainingBlocks = [...blockMap.entries()]
+      .filter(([buildingId]) => !seenIds.has(buildingId))
+      .map(([, block]) => block);
+
+    return [...orderedBlocks, ...remainingBlocks];
   }
 
   function getHomesCondition1BundleInsertAnchor(bundle) {
@@ -1696,6 +2424,33 @@
     return `Page ${pageNumber}`;
   }
 
+  function buildCanaryPageUrl(pageNumber) {
+    const normalizedPage = Number.parseInt(String(pageNumber), 10);
+    if (!Number.isFinite(normalizedPage) || normalizedPage <= 1) {
+      return new URL('/chintai/tokyo/list/', window.location.origin).href;
+    }
+
+    return new URL(`/chintai/tokyo/list/?page=${normalizedPage}`, window.location.origin).href;
+  }
+
+  function getCanaryNextPageUrl(root = document) {
+    const response = getCanarySearchEstatesResponse(root);
+    const pageNumber = Number.parseInt(String(response?.page || ''), 10);
+
+    if (!response || response.isFinished || !Number.isFinite(pageNumber) || pageNumber <= 0) {
+      return '';
+    }
+
+    return buildCanaryPageUrl(pageNumber + 1);
+  }
+
+  function getCanaryPageLabel(root = document) {
+    const pageNumber = Number.parseInt(String(getCanarySearchEstatesResponse(root)?.page || ''), 10);
+    if (!Number.isFinite(pageNumber) || pageNumber <= 0) return '';
+
+    return `Canary p.${pageNumber}`;
+  }
+
   async function fetchHtmlDocument(url) {
     const response = await fetch(url, { credentials: 'include' });
     if (!response.ok) {
@@ -1718,6 +2473,72 @@
     item.className = 'hc-page-separator-item';
     item.appendChild(createDefaultPageSeparator(pageLabel));
     return item;
+  }
+
+  function getCanaryLayoutRoot(root = document) {
+    const bundle = getCanaryBundle(root);
+    let current = bundle?.parentElement || null;
+
+    while (current && current !== root.body) {
+      if (current.querySelector('h1') && current.contains(bundle)) {
+        current.classList.add('hc-canary-layout-root');
+        return current;
+      }
+      current = current.parentElement;
+    }
+
+    return bundle?.parentElement || null;
+  }
+
+  function normalizeCanaryBundleLayout(root = document) {
+    if (root !== document || window.innerWidth < 1024) {
+      return;
+    }
+
+    const bundle = getCanaryBundle(root);
+    if (!bundle) return;
+    const pageData = getCanarySearchEstatesResponse(root);
+    const beforeColumns = bundle.querySelectorAll('.Masonry_Columns').length;
+    const beforeNormalizedBlocks = bundle.querySelectorAll('.hc-canary-column > .hc-canary-building').length;
+
+    document.body.classList.add('hc-canary-page');
+    getCanaryLayoutRoot(root)?.classList?.add('hc-canary-layout-root');
+
+    let normalizedColumn = bundle.querySelector('.hc-canary-column');
+    if (!normalizedColumn) {
+      normalizedColumn = document.createElement('div');
+      normalizedColumn.className = 'hc-canary-column';
+      bundle.appendChild(normalizedColumn);
+    }
+
+    getCanaryBuildingBlocks(bundle).forEach(block => {
+      normalizedColumn.appendChild(block);
+    });
+
+    [...bundle.children].forEach(child => {
+      if (child === normalizedColumn) return;
+      if (child.classList.contains('Masonry_Columns')) return;
+      if (child.classList.contains('hc-page-separator')) {
+        normalizedColumn.appendChild(child);
+        return;
+      }
+
+      const hasBuildingLink = !!child.querySelector?.('a[href^="/chintai/buildings/"]');
+      const hasRoomCards = child.querySelectorAll?.('a[data-testid="search-result-room-thumbail"][href^="/chintai/rooms/"]').length > 0;
+      if (hasBuildingLink && hasRoomCards) {
+        child.classList.add('hc-canary-building');
+        normalizedColumn.appendChild(child);
+      }
+    });
+
+    bundle.classList.add('hc-canary-bundle-normalized');
+    recordDiagnostic('canary.normalize', {
+      page: pageData?.page || '',
+      beforeColumns,
+      beforeNormalizedBlocks,
+      afterNormalizedBlocks: normalizedColumn.querySelectorAll(':scope > .hc-canary-building').length,
+      visibleCards: document.querySelectorAll(currentSite.itemSelector).length
+    });
   }
 
   function appendNextPageBlocks(buildingBlocks, pageLabel = '') {
@@ -1765,9 +2586,11 @@
         }
 
         appendNextPageBlocks(buildingBlocks, pageLabel);
+        currentSite.normalizeBundleLayout?.();
         nextUrl = currentSite.getNextPageUrl(nextDocument);
       }
 
+      currentSite.normalizeBundleLayout?.();
       scan();
     } finally {
       isNextPageLoading = false;
@@ -1847,6 +2670,7 @@
         </div>
         <button type="button" id="hc-export">JSON書き出し</button>
         <button type="button" id="hc-import">JSON読み込み</button>
+        ${DEBUG_TOOLS_ENABLED ? '<button type="button" id="hc-debug-export">DEBUG書き出し</button>' : ''}
         <input type="file" id="hc-import-file" class="hc-import-file" accept="application/json,.json">
       </div>
     `;
@@ -1854,6 +2678,7 @@
 
     const filterCheckboxes = toolbar.querySelectorAll('.hc-filter-checkbox');
     const exportBtn = toolbar.querySelector('#hc-export');
+    const debugExportBtn = toolbar.querySelector('#hc-debug-export');
     const importBtn = toolbar.querySelector('#hc-import');
     const importFileInput = toolbar.querySelector('#hc-import-file');
 
@@ -1877,6 +2702,15 @@
       } catch (error) {
         console.error('Failed to export JSON', error);
         window.alert('JSON書き出しに失敗しました。');
+      }
+    });
+
+    debugExportBtn?.addEventListener('click', async () => {
+      try {
+        await exportDebugJson();
+      } catch (error) {
+        console.error('Failed to export debug JSON', error);
+        window.alert('DEBUG書き出しに失敗しました。');
       }
     });
 
@@ -2189,7 +3023,7 @@
       colorSelect.value = state.color;
     }
 
-    if (commentArea && commentArea.value !== (state.comment || '')) {
+    if (commentArea && commentArea !== document.activeElement && commentArea.value !== (state.comment || '')) {
       commentArea.value = state.comment || '';
     }
 
@@ -2400,6 +3234,8 @@
       await saveItemCommentFromModal();
     });
 
+    attachCompositionGuards(modal.querySelector('[data-hc-item-comment-input]'), 'modal-item-comment');
+
     return modal;
   }
 
@@ -2466,6 +3302,7 @@
   function createPanel(card, listingId, state) {
     const panel = document.createElement('div');
     panel.className = 'hc-panel';
+    panel.setAttribute('data-hc-listing-id', listingId);
 
     panel.innerHTML = `
       <div class="hc-panel-row">
@@ -2523,6 +3360,8 @@
 
     colorSelect.value = state.color;
     commentArea.value = state.comment || '';
+    attachCompositionGuards(commentArea, 'card-comment');
+    attachCompositionGuards(detailUrlInput, 'detail-url-input');
 
     colorSelect.addEventListener('change', async () => {
       const identity = getCardIdentity(card);
@@ -2676,6 +3515,12 @@
     mountPoint.appendChild(panel);
   }
 
+  function mountCanaryPanel(card, panel) {
+    const wrapper = getCanaryRoomWrapper(card);
+    wrapper.classList.add('hc-canary-room');
+    wrapper.insertBefore(panel, card.nextSibling);
+  }
+
   function getSuumoBuildingContainer(card) {
     return card.closest('li');
   }
@@ -2690,6 +3535,16 @@
 
   function getAthomeContainerCards(container) {
     return [...container.querySelectorAll('.p-property__room--detailbox[data-bukken-no]')];
+  }
+
+  function getCanaryBuildingContainer(card) {
+    const root = getCanaryBuildingRoot(card);
+    root.classList.add('hc-canary-building');
+    return root;
+  }
+
+  function getCanaryContainerCards(container) {
+    return [...container.querySelectorAll('a[data-testid="search-result-room-thumbail"][href^="/chintai/rooms/"]')];
   }
 
   function enhanceCard(card) {
@@ -2744,30 +3599,49 @@
     }
   }
 
-  function scan() {
-    createToolbar();
-    document.querySelectorAll(currentSite.itemSelector).forEach(enhanceCard);
-    filterCards();
-    updateToolbarSummary();
-  }
-
   async function init() {
+    exposeDiagnosticHelpers();
+    recordDiagnostic('init.start', {
+      site: currentSite.id,
+      url: window.location.href
+    });
     await loadAll();
     chrome.storage.onChanged.addListener(handleStorageChange);
-    scan();
+    scheduleScan('init');
 
-    const observer = new MutationObserver(() => {
-      scan();
+    observer = new MutationObserver(mutations => {
+      observerEventCount += 1;
+      const mutationSummary = getMutationSummary(mutations);
+      const now = Date.now();
+      observerMutationTimestamps.push(now);
+      observerMutationTimestamps = observerMutationTimestamps.filter(timestamp => now - timestamp <= OBSERVER_BURST_WINDOW_MS);
+
+      if (observerEventCount <= 20 || observerEventCount % 25 === 0) {
+        recordDiagnostic('observer.mutation', {
+          event: observerEventCount,
+          burstCount: observerMutationTimestamps.length,
+          ...mutationSummary
+        });
+      }
+
+      if (observerMutationTimestamps.length >= OBSERVER_BURST_LIMIT) {
+        temporarilySuspendObserver('observer.suspended', {
+          event: observerEventCount,
+          burstCount: observerMutationTimestamps.length,
+          ...mutationSummary
+        });
+        return;
+      }
+
+      scheduleScan('observer.mutation', {
+        event: observerEventCount,
+        burstCount: observerMutationTimestamps.length,
+        ...mutationSummary
+      });
     });
 
-    observer.observe(document.body, {
-      childList: true,
-      subtree: true
-    });
+    reconnectObserver();
 
-    void loadNextPages().catch(error => {
-      console.error('Failed to load next pages', error);
-    });
   }
 
   init();
