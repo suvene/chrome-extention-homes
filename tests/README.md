@@ -16,6 +16,8 @@ PowerShell が使える環境では、既存の入口も使えます。
 powershell -ExecutionPolicy Bypass -File .\tests\smoke.ps1
 ```
 
+Canary の実ページだけで出る不安定挙動を調べるときは、診断モードの戻し方を [docs/testing_v1.2.md](/Users/hirok/dev/chrome-extention-homes/docs/testing_v1.2.md) で確認してください。
+
 確認内容:
 
 - `content.js` の構文確認
