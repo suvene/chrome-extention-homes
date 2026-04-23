@@ -12,6 +12,8 @@ const homesConditionListSamplePath = path.join(repoRoot, "samples/home's/260418-
 const suumoSamplePath = path.join(repoRoot, 'samples/suumo/260418-2136_FR301FC001-list-bundle.html');
 const athomeBundleSamplePath = path.join(repoRoot, 'samples/athome/260420-0339_tokyo-list_bundle.html');
 const athomePagerSamplePath = path.join(repoRoot, 'samples/athome/260420-0339_tokyo-list_page-selector.html');
+const airdoorBundleSamplePath = path.join(repoRoot, 'samples/airdoor/260423-1951_list_bundle.html');
+const airdoorPagerSamplePath = path.join(repoRoot, 'samples/airdoor/260423-1951_list_page-selector.html');
 const canaryBundleSamplePath = path.join(repoRoot, 'samples/canary/260421-1157_tokyo-list_bundle.html');
 const canaryPage2SamplePath = path.join(repoRoot, 'samples/canary/260421-1159_tokyo-list_page2.html');
 
@@ -27,6 +29,7 @@ const requiredPatterns = [
   "id: 'homes-condition-list'",
   "id: 'suumo-fr301fc001'",
   "id: 'athome-tokyo-list'",
+  "id: 'airdoor-list'",
   "id: 'canary-tokyo-list'",
   'function buildListingFingerprint',
   'function normalizeAddressText',
@@ -43,6 +46,11 @@ const requiredPatterns = [
   'function getAthomeCanonicalListingId',
   'function getAthomeLookupStorageIds',
   'function getAthomeNextPageUrl',
+  'function getAirdoorDetailUrl',
+  'function getAirdoorCanonicalListingId',
+  'function getAirdoorLookupStorageIds',
+  'function getAirdoorNextPageUrl',
+  'function buildAirdoorPageUrl',
   'function getCanaryDetailUrl',
   'function getCanaryCanonicalListingId',
   'function getCanaryLookupStorageIds',
@@ -226,6 +234,10 @@ function checkRequiredPatterns() {
     throw new Error('Required athome filtered selector is missing from content.css');
   }
 
+  if (!css.includes('.hc-airdoor-room.hc-filtered-out')) {
+    throw new Error('Required airdoor filtered selector is missing from content.css');
+  }
+
   if (!css.includes('.hc-canary-room.hc-filtered-out')) {
     throw new Error('Required Canary filtered selector is missing from content.css');
   }
@@ -288,14 +300,15 @@ function checkManifestSupport() {
   const homesListMatch = 'https://www.homes.co.jp/list/*';
   const expectedMatch = 'https://suumo.jp/jj/chintai/ichiran/FR301FC001/*';
   const athomeMatch = 'https://www.athome.co.jp/chintai/tokyo/list/*';
+  const airdoorMatch = 'https://airdoor.jp/list*';
   const canaryMatch = 'https://web.canary-app.jp/chintai/tokyo/list/*';
 
   if (manifest.name !== '賃貸物件 条件一覧アシスタント') {
     throw new Error('Manifest name was not updated to the generic assistant name.');
   }
 
-  if (!manifest.description.includes('HOME\'S / SUUMO / athome / Canary')) {
-    throw new Error('Manifest description does not mention HOME\'S / SUUMO / athome / Canary support.');
+  if (!manifest.description.includes('HOME\'S / SUUMO / athome / airdoor / Canary')) {
+    throw new Error('Manifest description does not mention HOME\'S / SUUMO / athome / airdoor / Canary support.');
   }
 
   if (!manifest.host_permissions.includes(expectedMatch)) {
@@ -308,6 +321,10 @@ function checkManifestSupport() {
 
   if (!manifest.host_permissions.includes(athomeMatch)) {
     throw new Error('Manifest host permissions do not include the athome list URL.');
+  }
+
+  if (!manifest.host_permissions.includes(airdoorMatch)) {
+    throw new Error('Manifest host permissions do not include the airdoor list URL.');
   }
 
   if (!manifest.host_permissions.includes(canaryMatch)) {
@@ -325,6 +342,10 @@ function checkManifestSupport() {
 
   if (!matches.includes(athomeMatch)) {
     throw new Error('Content script matches do not include the athome list URL.');
+  }
+
+  if (!matches.includes(airdoorMatch)) {
+    throw new Error('Content script matches do not include the airdoor list URL.');
   }
 
   if (!matches.includes(canaryMatch)) {
@@ -350,6 +371,8 @@ function checkSampleFixtures() {
   const suumo = compactHtml(fs.readFileSync(suumoSamplePath, 'utf8'));
   const athome = compactHtml(fs.readFileSync(athomeBundleSamplePath, 'utf8'));
   const athomePager = compactHtml(fs.readFileSync(athomePagerSamplePath, 'utf8'));
+  const airdoor = compactHtml(fs.readFileSync(airdoorBundleSamplePath, 'utf8'));
+  const airdoorPager = compactHtml(fs.readFileSync(airdoorPagerSamplePath, 'utf8'));
   const canary = compactHtml(fs.readFileSync(canaryBundleSamplePath, 'utf8'));
   const canaryPage2 = compactHtml(fs.readFileSync(canaryPage2SamplePath, 'utf8'));
 
@@ -409,6 +432,30 @@ function checkSampleFixtures() {
     throw new Error('athome page selector sample is missing the next page link.');
   }
 
+  if (!airdoor.includes('class="PropertyPanelBuilding_buildingTitle__tuPqN">【空室4件】 D Paina 今井南町</h3>')) {
+    throw new Error('airdoor sample is missing the building title selector used for linking.');
+  }
+
+  if (!airdoor.includes('神奈川県川崎市中原区今井南町33-30')) {
+    throw new Error('airdoor sample is missing the address selector used for linking.');
+  }
+
+  if (!airdoor.includes('class="mb-2 font-semibold md:text-xl PropertyPanelRoom_rentPrice__mYBSX text-base">17.3万円')) {
+    throw new Error('airdoor sample is missing the rent selector used for linking.');
+  }
+
+  if (!airdoor.includes('href="/detail/147602/563194"')) {
+    throw new Error('airdoor sample is missing the detail URL selector used for linking.');
+  }
+
+  if (!airdoorPager.includes('Search_isActive__rcdcR') || !airdoorPager.includes('>2</div>')) {
+    throw new Error('airdoor page selector sample is missing the active page marker.');
+  }
+
+  if (!airdoorPager.includes('href="/list?p=3"')) {
+    throw new Error('airdoor page selector sample is missing the next page link.');
+  }
+
   if (!canary.includes('href="/chintai/buildings/fbcc6a5f-1c6b-4cef-bb61-f5b60ba559c9/"')) {
     throw new Error('Canary sample is missing the building link selector used for linking.');
   }
@@ -437,12 +484,12 @@ function checkSampleFixtures() {
 function checkStorageDocVersion() {
   console.log('Checking storage documentation version...');
 
-  const latestDocPath = path.join(docsPath, 'storage_sync_v1.13.md');
+  const latestDocPath = path.join(docsPath, 'storage_sync_v1.14.md');
   if (!fs.existsSync(latestDocPath)) {
-    throw new Error('Latest storage sync doc must be versioned as docs/storage_sync_v1.13.md.');
+    throw new Error('Latest storage sync doc must be versioned as docs/storage_sync_v1.14.md.');
   }
 
-  if (fs.existsSync(path.join(docsPath, 'storage_sync_v1.12.md'))) {
+  if (fs.existsSync(path.join(docsPath, 'storage_sync_v1.13.md'))) {
     throw new Error('Older latest storage sync doc should have been removed after version bump.');
   }
 }

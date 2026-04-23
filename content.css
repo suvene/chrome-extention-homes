@@ -54,6 +54,9 @@
   display: inline-flex;
   gap: 6px;
   align-items: center;
+  color: #f8fafc !important;
+  -webkit-text-fill-color: #f8fafc !important;
+  opacity: 1 !important;
 }
 
 .hc-filter-checkbox {
@@ -82,6 +85,55 @@
   font-size: 14px;
 }
 
+.hc-toolbar strong {
+  color: #f8fafc;
+}
+
+.hc-toolbar button,
+.hc-panel button,
+.hc-modal button,
+.hc-toolbar select,
+.hc-panel select,
+.hc-panel input,
+.hc-panel textarea,
+.hc-modal input {
+  font: inherit;
+  line-height: 1.4;
+  opacity: 1 !important;
+  filter: none !important;
+  text-shadow: none;
+}
+
+.hc-toolbar button,
+.hc-panel button,
+.hc-modal button,
+.hc-toolbar select,
+.hc-panel select {
+  color: #0f172a !important;
+  -webkit-text-fill-color: #0f172a !important;
+}
+
+.hc-panel input,
+.hc-panel textarea,
+.hc-modal input {
+  color: #0f172a !important;
+  -webkit-text-fill-color: #0f172a !important;
+  background: #fff;
+}
+
+.hc-toolbar button {
+  padding: 6px 10px;
+  border: 1px solid #94a3b8;
+  border-radius: 8px;
+  background: #fff;
+  color: #1f2937 !important;
+  cursor: pointer;
+}
+
+.hc-toolbar button:hover {
+  background: #f8fafc;
+}
+
 .hc-import-file {
   display: none;
 }
@@ -105,6 +157,7 @@
   padding: 10px 12px;
   border: 1px solid #d7dce2;
   background: #f7fafc;
+  color: #0f172a;
   border-radius: 8px;
   width: 100%;
   box-sizing: border-box;
@@ -296,7 +349,7 @@
   margin-bottom: 8px;
   font-size: 12px;
   font-weight: 700;
-  color: #334155;
+  color: #0f172a;
   text-align: left;
 }
 
@@ -836,6 +889,7 @@ body.hc-canary-page .hc-canary-room > .hc-panel {
 tr.prg-roomRow,
 table.cassetteitem_other > tbody,
 .p-property__room--detailbox,
+.hc-airdoor-room,
 .hc-canary-room {
   transition: opacity .18s ease, transform .18s ease, box-shadow .18s ease;
 }
@@ -848,6 +902,15 @@ table.cassetteitem_other > tbody,
 .p-property__room--detailbox.hc-color-red {
   box-shadow: inset 6px 0 0 #ef4444;
   background: #fff5f5;
+}
+
+.hc-airdoor-room.hc-color-red {
+  box-shadow: inset 6px 0 0 #ef4444;
+  background: #fff5f5;
+}
+
+.hc-airdoor-room .PropertyPanelBuilding_buildingTitle__tuPqN {
+  color: #0f172a;
 }
 
 .hc-canary-room.hc-color-red {
@@ -877,6 +940,11 @@ table.cassetteitem_other > tbody.hc-color-red > tr:first-child > td:first-child 
 }
 
 .p-property__room--detailbox.hc-color-orange {
+  box-shadow: inset 6px 0 0 #f59e0b;
+  background: #fffaf0;
+}
+
+.hc-airdoor-room.hc-color-orange {
   box-shadow: inset 6px 0 0 #f59e0b;
   background: #fffaf0;
 }
@@ -912,6 +980,11 @@ table.cassetteitem_other > tbody.hc-color-orange > tr:first-child > td:first-chi
   background: #f0fdf4;
 }
 
+.hc-airdoor-room.hc-color-green {
+  box-shadow: inset 6px 0 0 #10b981;
+  background: #f0fdf4;
+}
+
 .hc-canary-room.hc-color-green {
   box-shadow: inset 6px 0 0 #10b981;
   background: #f0fdf4;
@@ -939,6 +1012,11 @@ table.cassetteitem_other > tbody.hc-color-green > tr:first-child > td:first-chil
 }
 
 .p-property__room--detailbox.hc-color-blue {
+  box-shadow: inset 6px 0 0 #3b82f6;
+  background: #eff6ff;
+}
+
+.hc-airdoor-room.hc-color-blue {
   box-shadow: inset 6px 0 0 #3b82f6;
   background: #eff6ff;
 }
@@ -974,6 +1052,11 @@ table.cassetteitem_other > tbody.hc-color-blue > tr:first-child > td:first-child
   background: #d1d5db;
 }
 
+.hc-airdoor-room.hc-color-gray {
+  box-shadow: inset 6px 0 0 #374151;
+  background: #d1d5db;
+}
+
 .hc-canary-room.hc-color-gray {
   box-shadow: inset 6px 0 0 #374151;
   background: #d1d5db;
@@ -1000,6 +1083,10 @@ table.cassetteitem_other > tbody.hc-color-gray > tr:first-child > td:first-child
 }
 
 .p-property__room--detailbox.hc-filtered-out {
+  display: none !important;
+}
+
+.hc-airdoor-room.hc-filtered-out {
   display: none !important;
 }
 

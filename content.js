@@ -147,6 +147,31 @@
       createPageSeparator: createDefaultPageSeparator
     },
     {
+      id: 'airdoor-list',
+      label: 'airdoor',
+      itemSelector: 'a.PropertyPanelRoom_roomItem__Dy2Dl[href^="/detail/"]',
+      matches: location =>
+        location.hostname === 'airdoor.jp'
+        && /^\/list\/?$/.test(location.pathname),
+      getListingId: getAirdoorCanonicalListingId,
+      getLegacyLookupIds: getAirdoorLookupStorageIds,
+      getTitle: getAirdoorTitle,
+      getName: getAirdoorName,
+      getAddress: getAirdoorAddress,
+      getRent: getAirdoorRent,
+      getDetailUrl: getAirdoorDetailUrl,
+      getDecoratedElements: getAirdoorDecoratedElements,
+      getPanel: getAirdoorPanel,
+      mountPanel: mountAirdoorPanel,
+      getBuildingContainer: getAirdoorBuildingContainer,
+      getContainerCards: getAirdoorContainerCards,
+      getBundle: getAirdoorBundle,
+      getBuildingBlocks: getAirdoorBuildingBlocks,
+      getNextPageUrl: getAirdoorNextPageUrl,
+      getPageLabel: getAirdoorPageLabel,
+      createPageSeparator: createDefaultPageSeparator
+    },
+    {
       id: 'canary-tokyo-list',
       label: 'Canary',
       itemSelector: '.hc-canary-column a[data-testid="search-result-room-thumbail"][href^="/chintai/rooms/"]',
@@ -1007,6 +1032,97 @@
       return new URL(href, window.location.href).href;
     } catch (error) {
       console.warn('Failed to resolve athome detail URL', error);
+      return '';
+    }
+  }
+
+  function parseAirdoorDetailIds(href) {
+    if (typeof href !== 'string' || !href.trim()) return null;
+
+    const match = href.match(/\/detail\/(\d+)\/(\d+)\/?/);
+    if (!match) return null;
+
+    return {
+      buildingId: match[1],
+      roomId: match[2]
+    };
+  }
+
+  function getAirdoorDetailLink(card) {
+    if (card?.matches?.('a.PropertyPanelRoom_roomItem__Dy2Dl[href^="/detail/"]')) {
+      return card;
+    }
+
+    return card?.querySelector?.('a.PropertyPanelRoom_roomItem__Dy2Dl[href^="/detail/"]') || null;
+  }
+
+  function getAirdoorBuildingRoot(card) {
+    return card.closest('.PropertyPanel_propertyPanel__8oJ13') || card;
+  }
+
+  function getAirdoorCanonicalListingId(card) {
+    const detailIds = parseAirdoorDetailIds(getAirdoorDetailLink(card)?.getAttribute('href'));
+    if (detailIds?.roomId) return `airdoor-room:${detailIds.roomId}`;
+
+    return '';
+  }
+
+  function getAirdoorLookupStorageIds(card) {
+    const ids = [];
+    const canonicalId = getAirdoorCanonicalListingId(card);
+    const detailIds = parseAirdoorDetailIds(getAirdoorDetailLink(card)?.getAttribute('href'));
+    const detailUrl = getAirdoorDetailUrl(card);
+
+    pushUnique(ids, canonicalId);
+    pushUnique(ids, detailIds?.buildingId ? `airdoor-building:${detailIds.buildingId}` : '');
+    pushUnique(ids, detailUrl ? `airdoor-href:${detailUrl}` : '');
+
+    return ids;
+  }
+
+  function getAirdoorName(card) {
+    const rawTitle = normalizeSpaces(
+      getAirdoorBuildingRoot(card).querySelector('.PropertyPanelBuilding_buildingTitle__tuPqN')?.textContent || ''
+    );
+
+    return rawTitle.replace(/^【空室\d+件】\s*/, '').trim();
+  }
+
+  function getAirdoorTitle(card) {
+    const title = getAirdoorName(card);
+    if (title) return title;
+
+    const roomLabel = normalizeSpaces(
+      getAirdoorDetailLink(card)?.querySelector('p')?.textContent || ''
+    );
+
+    return roomLabel || '物件名不明';
+  }
+
+  function getAirdoorAddress(card) {
+    const root = getAirdoorBuildingRoot(card);
+
+    return normalizeSpaces(
+      root.querySelector('.PropertyPanelBuilding_buildingInformationSection__deSLp p.is-mt5')?.textContent
+      || root.querySelector('.PropertyPanelBuilding_buildingInformation__bL4Gu.is-sp-only p:nth-of-type(2)')?.textContent
+      || ''
+    );
+  }
+
+  function getAirdoorRent(card) {
+    const rentNode = getAirdoorDetailLink(card)?.querySelector('.PropertyPanelRoom_rentPrice__mYBSX');
+    const ownText = rentNode?.childNodes?.[0]?.textContent || '';
+    return normalizeSpaces(ownText || rentNode?.textContent || '');
+  }
+
+  function getAirdoorDetailUrl(card) {
+    const href = getAirdoorDetailLink(card)?.getAttribute('href') || '';
+    if (!href) return '';
+
+    try {
+      return new URL(href, window.location.href).href;
+    } catch (error) {
+      console.warn('Failed to resolve airdoor detail URL', error);
       return '';
     }
   }
@@ -2192,6 +2308,27 @@
     return card.querySelector('.hc-panel') || null;
   }
 
+  function getAirdoorExistingRoomWrapper(card) {
+    return card.parentElement?.classList.contains('hc-airdoor-room')
+      ? card.parentElement
+      : null;
+  }
+
+  function getAirdoorRoomWrapper(card) {
+    const existingWrapper = getAirdoorExistingRoomWrapper(card);
+    if (existingWrapper) return existingWrapper;
+
+    const wrapper = document.createElement('div');
+    wrapper.className = 'hc-airdoor-room';
+    card.parentNode?.insertBefore(wrapper, card);
+    wrapper.appendChild(card);
+    return wrapper;
+  }
+
+  function getAirdoorPanel(card) {
+    return getAirdoorExistingRoomWrapper(card)?.querySelector(':scope > .hc-panel') || null;
+  }
+
   function getHomesCondition1Panel(card) {
     if (card.matches('.hc-panel')) return card;
 
@@ -2205,6 +2342,10 @@
 
   function getDecoratedElements(card) {
     return currentSite.getDecoratedElements(card);
+  }
+
+  function getAirdoorDecoratedElements(card) {
+    return [getAirdoorExistingRoomWrapper(card) || card];
   }
 
   function getHomesCondition1BuildingContainer(card) {
@@ -2234,6 +2375,10 @@
     return root.querySelector('.p-result__main');
   }
 
+  function getAirdoorBundle(root = document) {
+    return root.querySelector('.Search_panelList__7I_4z');
+  }
+
   function getCanaryBundle(root = document) {
     return root.querySelector('.Masonry_Container');
   }
@@ -2260,6 +2405,12 @@
     if (!bundle) return [];
 
     return [...bundle.children].filter(child => child.matches('.p-property.p-property--building.js-block'));
+  }
+
+  function getAirdoorBuildingBlocks(bundle) {
+    if (!bundle) return [];
+
+    return [...bundle.children].filter(child => child.matches('li'));
   }
 
   function getCanaryPageData(root = document) {
@@ -2444,11 +2595,56 @@
     return buildCanaryPageUrl(pageNumber + 1);
   }
 
+  function buildAirdoorPageUrl(pageNumber) {
+    const normalizedPage = Number.parseInt(String(pageNumber), 10);
+    if (!Number.isFinite(normalizedPage) || normalizedPage <= 1) {
+      return new URL('/list', window.location.origin).href;
+    }
+
+    const url = new URL('/list', window.location.origin);
+    url.searchParams.set('p', String(normalizedPage));
+    return url.href;
+  }
+
+  function getAirdoorPaginator(root = document) {
+    return [...root.querySelectorAll('.Search_paginator__ki6XG')]
+      .find(pager => !pager.className.includes('Search_bottom__5tNGR'))
+      || root.querySelector('.Search_paginator__ki6XG');
+  }
+
+  function getAirdoorNextPageUrl(root = document) {
+    const pager = getAirdoorPaginator(root);
+    if (!pager) return '';
+
+    const activeItem = pager.querySelector('.Search_paginatorItem__8yzZJ.Search_isActive__rcdcR');
+    const nextLink = activeItem?.nextElementSibling?.querySelector('a.Search_paginatorItemLink__GkmEM[href]');
+    const href = nextLink?.getAttribute('href');
+    if (!href) return '';
+
+    try {
+      return new URL(href, window.location.href).href;
+    } catch (error) {
+      console.warn('Failed to resolve airdoor next page URL', error);
+      return '';
+    }
+  }
+
   function getCanaryPageLabel(root = document) {
     const pageNumber = Number.parseInt(String(getCanarySearchEstatesResponse(root)?.page || ''), 10);
     if (!Number.isFinite(pageNumber) || pageNumber <= 0) return '';
 
     return `Canary p.${pageNumber}`;
+  }
+
+  function getAirdoorPageLabel(root = document) {
+    const pageNumber = getAirdoorPaginator(root)
+      ?.querySelector('.Search_paginatorItem__8yzZJ.Search_isActive__rcdcR')
+      ?.textContent
+      ?.trim();
+
+    if (!pageNumber) return '';
+
+    return `Page ${pageNumber}`;
   }
 
   async function fetchHtmlDocument(url) {
@@ -3515,6 +3711,11 @@
     mountPoint.appendChild(panel);
   }
 
+  function mountAirdoorPanel(card, panel) {
+    const wrapper = getAirdoorRoomWrapper(card);
+    wrapper.appendChild(panel);
+  }
+
   function mountCanaryPanel(card, panel) {
     const wrapper = getCanaryRoomWrapper(card);
     wrapper.classList.add('hc-canary-room');
@@ -3533,8 +3734,16 @@
     return card.closest('.p-property.p-property--building.js-block');
   }
 
+  function getAirdoorBuildingContainer(card) {
+    return card.closest('.PropertyPanel_propertyPanel__8oJ13');
+  }
+
   function getAthomeContainerCards(container) {
     return [...container.querySelectorAll('.p-property__room--detailbox[data-bukken-no]')];
+  }
+
+  function getAirdoorContainerCards(container) {
+    return [...container.querySelectorAll('a.PropertyPanelRoom_roomItem__Dy2Dl[href^="/detail/"]')];
   }
 
   function getCanaryBuildingContainer(card) {
