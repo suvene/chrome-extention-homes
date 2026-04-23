@@ -1,7 +1,7 @@
-# storage_sync_v1.13.md
+# storage_sync_v1.14.md
 
 ## 目的
-- HOME'S / SUUMO / athome / Canary の一覧で付けたステータス、紐づき共通コメント、掲載ごとの短い個別コメントを、同じブラウザ内の `chrome.storage.local` に保存する。
+- HOME'S / SUUMO / athome / airdoor / Canary の一覧で付けたステータス、紐づき共通コメント、掲載ごとの短い個別コメントを、同じブラウザ内の `chrome.storage.local` に保存する。
 - 読み込んだ掲載の台帳をローカルに保持し、物件名・住所・家賃の一致候補から紐づきを判断・再編集できるようにする。
 - JSON の書き出しと読み込みで、状態だけでなく掲載台帳と紐づき情報も救済できるようにする。
 
@@ -17,7 +17,7 @@
 - 正規化では全角/半角英数、空白、ハイフン、丁目/番地表記の揺れを吸収する。
 - 家賃は base rent のみを使い、管理費は fingerprint に含めない。
 - fingerprint を作れない掲載は自動候補を持たず、listingId 単位でのみ扱う。
-- 対応 site id は `homes-condition1` `homes-condition-list` `suumo-fr301fc001` `athome-tokyo-list` `canary-tokyo-list` とする。
+- 対応 site id は `homes-condition1` `homes-condition-list` `suumo-fr301fc001` `athome-tokyo-list` `airdoor-list` `canary-tokyo-list` とする。
 - 旧実装の `chrome.storage.sync` と旧 local key は初回だけ読み、`homes_state_v1` へ移行する。
 
 ## 反映方針
