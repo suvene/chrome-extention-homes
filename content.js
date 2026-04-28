@@ -43,6 +43,26 @@
   );
   const SITE_CONFIGS = [
     {
+      id: 'homes-detail',
+      label: 'HOME\'S',
+      registrySiteId: 'homes-condition1',
+      isDetailPage: true,
+      itemSelector: 'body',
+      matches: location =>
+        location.hostname === 'www.homes.co.jp'
+        && location.pathname.startsWith('/chintai/room/'),
+      getListingId: getHomesDetailListingId,
+      getLegacyLookupIds: getHomesDetailLookupStorageIds,
+      getTitle: getDetailPageTitle,
+      getName: getDetailPageName,
+      getAddress: getDetailPageAddress,
+      getRent: getDetailPageRent,
+      getDetailUrl: getCurrentDetailUrl,
+      getDecoratedElements: getDetailPanelDecoratedElements,
+      getPanel: getDetailPanel,
+      mountPanel: mountDetailPanel
+    },
+    {
       id: 'homes-condition1',
       label: 'HOME\'S',
       itemSelector: 'tr.prg-roomInfo[data-kykey]',
@@ -96,6 +116,26 @@
       createPageSeparator: createDefaultPageSeparator
     },
     {
+      id: 'suumo-detail',
+      label: 'SUUMO',
+      registrySiteId: 'suumo-fr301fc001',
+      isDetailPage: true,
+      itemSelector: 'body',
+      matches: location =>
+        location.hostname === 'suumo.jp'
+        && location.pathname.startsWith('/chintai/jnc_'),
+      getListingId: getSuumoDetailListingId,
+      getLegacyLookupIds: getSuumoDetailLookupStorageIds,
+      getTitle: getDetailPageTitle,
+      getName: getDetailPageName,
+      getAddress: getDetailPageAddress,
+      getRent: getDetailPageRent,
+      getDetailUrl: getCurrentDetailUrl,
+      getDecoratedElements: getDetailPanelDecoratedElements,
+      getPanel: getDetailPanel,
+      mountPanel: mountDetailPanel
+    },
+    {
       id: 'suumo-fr301fc001',
       label: 'SUUMO',
       itemSelector: 'table.cassetteitem_other > tbody',
@@ -119,6 +159,26 @@
       getNextPageUrl: getSuumoNextPageUrl,
       getPageLabel: getSuumoPageLabel,
       createPageSeparator: createSuumoPageSeparator
+    },
+    {
+      id: 'athome-detail',
+      label: 'athome',
+      registrySiteId: 'athome-tokyo-list',
+      isDetailPage: true,
+      itemSelector: 'body',
+      matches: location =>
+        location.hostname === 'www.athome.co.jp'
+        && /^\/chintai\/\d+\/?$/.test(location.pathname),
+      getListingId: getAthomeDetailListingId,
+      getLegacyLookupIds: getAthomeDetailLookupStorageIds,
+      getTitle: getDetailPageTitle,
+      getName: getDetailPageName,
+      getAddress: getDetailPageAddress,
+      getRent: getDetailPageRent,
+      getDetailUrl: getCurrentDetailUrl,
+      getDecoratedElements: getDetailPanelDecoratedElements,
+      getPanel: getDetailPanel,
+      mountPanel: mountDetailPanel
     },
     {
       id: 'athome-tokyo-list',
@@ -147,6 +207,26 @@
       createPageSeparator: createDefaultPageSeparator
     },
     {
+      id: 'airdoor-detail',
+      label: 'airdoor',
+      registrySiteId: 'airdoor-list',
+      isDetailPage: true,
+      itemSelector: 'body',
+      matches: location =>
+        location.hostname === 'airdoor.jp'
+        && /^\/detail\/\d+\/\d+\/?$/.test(location.pathname),
+      getListingId: getAirdoorDetailListingId,
+      getLegacyLookupIds: getAirdoorDetailLookupStorageIds,
+      getTitle: getDetailPageTitle,
+      getName: getDetailPageName,
+      getAddress: getDetailPageAddress,
+      getRent: getDetailPageRent,
+      getDetailUrl: getCurrentDetailUrl,
+      getDecoratedElements: getDetailPanelDecoratedElements,
+      getPanel: getDetailPanel,
+      mountPanel: mountDetailPanel
+    },
+    {
       id: 'airdoor-list',
       label: 'airdoor',
       itemSelector: 'a.PropertyPanelRoom_roomItem__Dy2Dl[href^="/detail/"]',
@@ -170,6 +250,26 @@
       getNextPageUrl: getAirdoorNextPageUrl,
       getPageLabel: getAirdoorPageLabel,
       createPageSeparator: createDefaultPageSeparator
+    },
+    {
+      id: 'canary-detail',
+      label: 'Canary',
+      registrySiteId: 'canary-tokyo-list',
+      isDetailPage: true,
+      itemSelector: 'body',
+      matches: location =>
+        location.hostname === 'web.canary-app.jp'
+        && location.pathname.startsWith('/chintai/rooms/'),
+      getListingId: getCanaryDetailListingId,
+      getLegacyLookupIds: getCanaryDetailLookupStorageIds,
+      getTitle: getDetailPageTitle,
+      getName: getDetailPageName,
+      getAddress: getDetailPageAddress,
+      getRent: getDetailPageRent,
+      getDetailUrl: getCurrentDetailUrl,
+      getDecoratedElements: getDetailPanelDecoratedElements,
+      getPanel: getDetailPanel,
+      mountPanel: mountDetailPanel
     },
     {
       id: 'canary-tokyo-list',
@@ -723,6 +823,55 @@
     }
   }
 
+  function getCurrentDetailUrl() {
+    return normalizeDetailUrl(window.location.href);
+  }
+
+  function getDetailDocumentHeading() {
+    return normalizeSpaces(document.querySelector('h1')?.textContent || '');
+  }
+
+  function getDetailTitleFallback() {
+    const heading = getDetailDocumentHeading();
+    if (heading) return heading;
+
+    return normalizeSpaces(document.title || '') || '物件名不明';
+  }
+
+  function getStoredDetailRecord(listingId = '', detailUrl = getCurrentDetailUrl()) {
+    const byListingId = listingId ? listingRegistry[listingId] : null;
+    if (byListingId) {
+      return normalizeListingRecord(byListingId);
+    }
+
+    const matchedListingId = detailUrl ? findListingIdByDetailUrl(detailUrl) : '';
+    if (matchedListingId && listingRegistry[matchedListingId]) {
+      return normalizeListingRecord(listingRegistry[matchedListingId]);
+    }
+
+    return normalizeListingRecord({});
+  }
+
+  function getDetailPageName(card) {
+    const listingId = currentSite.getListingId(card);
+    const stored = getStoredDetailRecord(listingId, currentSite.getDetailUrl(card));
+    return stored.name || getDetailDocumentHeading() || '';
+  }
+
+  function getDetailPageTitle(card) {
+    return getDetailPageName(card) || getDetailTitleFallback();
+  }
+
+  function getDetailPageAddress(card) {
+    const listingId = currentSite.getListingId(card);
+    return getStoredDetailRecord(listingId, currentSite.getDetailUrl(card)).address || '';
+  }
+
+  function getDetailPageRent(card) {
+    const listingId = currentSite.getListingId(card);
+    return getStoredDetailRecord(listingId, currentSite.getDetailUrl(card)).rent || '';
+  }
+
   function buildListingFingerprint(name, address, rent) {
     const normalizedName = normalizePropertyName(name);
     const normalizedAddress = normalizeAddressText(address);
@@ -850,6 +999,21 @@
     return ids;
   }
 
+  function getHomesDetailListingId() {
+    const roomId = parseHomesRoomIdFromHref(window.location.href);
+    return roomId ? `room:${roomId}` : '';
+  }
+
+  function getHomesDetailLookupStorageIds() {
+    const ids = [];
+    const canonicalId = getHomesDetailListingId();
+    const detailUrl = getCurrentDetailUrl();
+
+    pushUnique(ids, canonicalId);
+    pushUnique(ids, detailUrl ? `href:${detailUrl}` : '');
+    return ids;
+  }
+
   function getHomesName(card) {
     const root =
       card.closest('.moduleInner.prg-building')
@@ -933,6 +1097,23 @@
     return ids;
   }
 
+  function getSuumoDetailListingId() {
+    const bc = parseSuumoBcFromHref(window.location.href);
+    return bc ? `suumo-room:${bc}` : '';
+  }
+
+  function getSuumoDetailLookupStorageIds() {
+    const ids = [];
+    const canonicalId = getSuumoDetailListingId();
+    const detailUrl = getCurrentDetailUrl();
+    const bc = parseSuumoBcFromHref(window.location.href);
+
+    pushUnique(ids, canonicalId);
+    pushUnique(ids, bc ? `suumo-bc:${bc}` : '');
+    pushUnique(ids, detailUrl ? `suumo-href:${detailUrl}` : '');
+    return ids;
+  }
+
   function getSuumoName(card) {
     return normalizeSpaces(card?.closest('li')?.querySelector('.cassetteitem_content-title')?.textContent || '');
   }
@@ -1000,6 +1181,23 @@
     pushUnique(ids, detailRoomId ? `athome-bukken:${detailRoomId}` : '');
     pushUnique(ids, detailUrl ? `athome-href:${detailUrl}` : '');
 
+    return ids;
+  }
+
+  function getAthomeDetailListingId() {
+    const roomId = parseAthomeRoomIdFromHref(window.location.href);
+    return roomId ? `athome-room:${roomId}` : '';
+  }
+
+  function getAthomeDetailLookupStorageIds() {
+    const ids = [];
+    const canonicalId = getAthomeDetailListingId();
+    const detailUrl = getCurrentDetailUrl();
+    const roomId = parseAthomeRoomIdFromHref(window.location.href);
+
+    pushUnique(ids, canonicalId);
+    pushUnique(ids, roomId ? `athome-bukken:${roomId}` : '');
+    pushUnique(ids, detailUrl ? `athome-href:${detailUrl}` : '');
     return ids;
   }
 
@@ -1077,6 +1275,23 @@
     pushUnique(ids, detailIds?.buildingId ? `airdoor-building:${detailIds.buildingId}` : '');
     pushUnique(ids, detailUrl ? `airdoor-href:${detailUrl}` : '');
 
+    return ids;
+  }
+
+  function getAirdoorDetailListingId() {
+    const detailIds = parseAirdoorDetailIds(window.location.pathname);
+    return detailIds?.roomId ? `airdoor-room:${detailIds.roomId}` : '';
+  }
+
+  function getAirdoorDetailLookupStorageIds() {
+    const ids = [];
+    const canonicalId = getAirdoorDetailListingId();
+    const detailIds = parseAirdoorDetailIds(window.location.pathname);
+    const detailUrl = getCurrentDetailUrl();
+
+    pushUnique(ids, canonicalId);
+    pushUnique(ids, detailIds?.buildingId ? `airdoor-building:${detailIds.buildingId}` : '');
+    pushUnique(ids, detailUrl ? `airdoor-href:${detailUrl}` : '');
     return ids;
   }
 
@@ -1236,6 +1451,21 @@
     return ids;
   }
 
+  function getCanaryDetailListingId() {
+    const roomId = parseCanaryRoomIdFromHref(window.location.pathname);
+    return roomId ? `canary-room:${roomId}` : '';
+  }
+
+  function getCanaryDetailLookupStorageIds() {
+    const ids = [];
+    const canonicalId = getCanaryDetailListingId();
+    const detailUrl = getCurrentDetailUrl();
+
+    pushUnique(ids, canonicalId);
+    pushUnique(ids, detailUrl ? `canary-href:${detailUrl}` : '');
+    return ids;
+  }
+
   function getCanaryName(card) {
     return normalizeSpaces(getCanaryBuildingLink(card)?.querySelector('p')?.textContent || '');
   }
@@ -1298,7 +1528,7 @@
       lookupIds,
       title: currentSite.getTitle(card),
       record: {
-        site: currentSite.id,
+        site: currentSite.registrySiteId || currentSite.id,
         name,
         address,
         rent,
@@ -2308,6 +2538,19 @@
     return card.querySelector('.hc-panel') || null;
   }
 
+  function getDetailPanelHost() {
+    return document.querySelector('.hc-detail-panel-host');
+  }
+
+  function getDetailPanel() {
+    return getDetailPanelHost()?.querySelector('.hc-panel') || null;
+  }
+
+  function getDetailPanelDecoratedElements() {
+    const host = getDetailPanelHost();
+    return host ? [host] : [];
+  }
+
   function getAirdoorExistingRoomWrapper(card) {
     return card.parentElement?.classList.contains('hc-airdoor-room')
       ? card.parentElement
@@ -2737,6 +2980,14 @@
     });
   }
 
+  function syncDetailPanelPosition() {
+    const host = getDetailPanelHost();
+    if (!host) return;
+
+    const toolbarHeight = document.querySelector('.hc-toolbar')?.getBoundingClientRect?.().height || 0;
+    host.style.top = `${Math.round(toolbarHeight + 12)}px`;
+  }
+
   function appendNextPageBlocks(buildingBlocks, pageLabel = '') {
     const bundle = currentSite.getBundle();
     if (!bundle || buildingBlocks.length === 0) return 0;
@@ -2850,14 +3101,18 @@
   function createToolbar() {
     if (document.querySelector('.hc-toolbar')) return;
 
+    const filterMarkup = currentSite.isDetailPage ? '' : `
+        <div class="hc-filter-group">
+          ${renderFilterCheckboxes()}
+        </div>
+    `;
+
     const toolbar = document.createElement('div');
     toolbar.className = 'hc-toolbar';
     toolbar.innerHTML = `
       <div class="hc-toolbar-inner">
         <strong>${APP_TITLE}</strong>
-        <div class="hc-filter-group">
-          ${renderFilterCheckboxes()}
-        </div>
+        ${filterMarkup}
         <div class="hc-sync-summary">
           <span class="hc-sync-item">
             <span class="hc-sync-label">最終更新日時</span>
@@ -2927,10 +3182,19 @@
       }
     });
 
+    if (currentSite.isDetailPage) {
+      window.addEventListener('resize', syncDetailPanelPosition, { passive: true });
+    }
+
     updateToolbarSummary();
+    syncDetailPanelPosition();
   }
 
   function filterCards() {
+    if (currentSite.isDetailPage) {
+      return;
+    }
+
     const buildingContainers = new Set();
     const duplicateListingIds = getDuplicateLinkedListingIdsOnPage();
 
@@ -3230,7 +3494,9 @@
       itemCommentLabel.classList.toggle('is-empty', !itemComment);
     }
 
-    syncLinkPanel(card);
+    if (!currentSite.isDetailPage) {
+      syncLinkPanel(card);
+    }
   }
 
   function toggleLinkGroup(toggleButton) {
@@ -3497,10 +3763,41 @@
 
   function createPanel(card, listingId, state) {
     const panel = document.createElement('div');
-    panel.className = 'hc-panel';
+    const isDetailPanel = currentSite.isDetailPage === true;
+    panel.className = isDetailPanel ? 'hc-panel hc-panel-detail' : 'hc-panel';
     panel.setAttribute('data-hc-listing-id', listingId);
 
-    panel.innerHTML = `
+    panel.innerHTML = isDetailPanel ? `
+      <div class="hc-detail-panel-header">
+        <div class="hc-panel-row hc-detail-panel-summary-row">
+          <label class="hc-inline">
+            ステータス
+            <select class="hc-color-select">
+              ${renderStatusSelectOptions()}
+            </select>
+          </label>
+          <span class="hc-status-badge">0. 未検討</span>
+          <span class="hc-item-comment-inline">
+            <button type="button" class="hc-item-comment-edit" data-hc-edit-item-comment="${escapeHtml(listingId)}">編集</button>
+            <span class="hc-item-comment-label is-empty" data-hc-item-comment-label></span>
+          </span>
+        </div>
+        <button
+          type="button"
+          class="hc-detail-panel-toggle"
+          data-hc-detail-panel-toggle
+          aria-expanded="true"
+          aria-label="この物件のメモをたたむ"
+        >
+          たたむ
+        </button>
+      </div>
+      <div class="hc-detail-panel-body" data-hc-detail-panel-body>
+        <div class="hc-panel-row hc-detail-panel-comment-row">
+          <textarea class="hc-comment" rows="3" placeholder="コメントを入力"></textarea>
+        </div>
+      </div>
+    ` : `
       <div class="hc-panel-row">
         <label class="hc-inline">
           ステータス
@@ -3621,25 +3918,36 @@
       );
     };
 
-    linkList.addEventListener('click', handleGroupedListClick);
+    linkList?.addEventListener('click', handleGroupedListClick);
     maybeList?.addEventListener('click', handleGroupedListClick);
-    detailUrlSuggestions.addEventListener('click', handleGroupedListClick);
+    detailUrlSuggestions?.addEventListener('click', handleGroupedListClick);
 
-    detailUrlButton.addEventListener('click', async () => {
+    detailUrlButton?.addEventListener('click', async () => {
       await applyDetailUrlLink(card, detailUrlInput);
     });
 
-    detailUrlInput.addEventListener('input', () => {
+    detailUrlInput?.addEventListener('input', () => {
       syncDetailUrlSuggestions(card);
     });
 
-    detailUrlInput.addEventListener('keydown', async event => {
+    detailUrlInput?.addEventListener('keydown', async event => {
       if (event.key !== 'Enter' || isComposingEnterKey(event)) return;
       event.preventDefault();
       await applyDetailUrlLink(card, detailUrlInput);
     });
 
     panel.addEventListener('click', event => {
+      const detailToggle = event.target.closest('[data-hc-detail-panel-toggle]');
+      if (detailToggle) {
+        const isExpanded = detailToggle.getAttribute('aria-expanded') !== 'false';
+        const nextExpanded = !isExpanded;
+        panel.dataset.collapsed = nextExpanded ? '0' : '1';
+        detailToggle.setAttribute('aria-expanded', String(nextExpanded));
+        detailToggle.setAttribute('aria-label', `この物件のメモを${nextExpanded ? 'たたむ' : '開く'}`);
+        detailToggle.textContent = nextExpanded ? 'たたむ' : '開く';
+        return;
+      }
+
       const editButton = event.target.closest('[data-hc-edit-item-comment]');
       if (!editButton) return;
       openItemCommentModal(editButton.getAttribute('data-hc-edit-item-comment') || '');
@@ -3722,6 +4030,18 @@
     wrapper.insertBefore(panel, card.nextSibling);
   }
 
+  function mountDetailPanel(card, panel) {
+    let host = getDetailPanelHost();
+    if (!host) {
+      host = document.createElement('div');
+      host.className = 'hc-detail-panel-host';
+      document.body.appendChild(host);
+    }
+
+    host.replaceChildren(panel);
+    syncDetailPanelPosition();
+  }
+
   function getSuumoBuildingContainer(card) {
     return card.closest('li');
   }
@@ -3761,6 +4081,10 @@
     card.dataset.hcEnhanced = '1';
 
     const identity = setCardIdentity(card);
+    if (!identity.listingId) {
+      return;
+    }
+
     upsertListingRecord(identity.listingId, identity.record);
 
     const state = normalizeState(getResolvedState(card).state, identity.title);
