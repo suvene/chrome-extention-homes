@@ -2,16 +2,21 @@
   "manifest_version": 3,
   "name": "賃貸物件 条件一覧アシスタント",
   "version": "0.2.0",
-  "description": "HOME'S / SUUMO / athome / airdoor / Canary の条件一覧にコメント・色分け・非表示機能を追加",
+  "description": "HOME'S / SUUMO / athome / airdoor / Canary の一覧・詳細画面にコメント、色分け、非表示補助を追加",
   "permissions": ["storage"],
   "host_permissions": [
     "https://www.homes.co.jp/search/condition-list/*",
     "https://www.homes.co.jp/search/condition1/*",
     "https://www.homes.co.jp/list/*",
+    "https://www.homes.co.jp/chintai/room/*",
     "https://suumo.jp/jj/chintai/ichiran/FR301FC001/*",
+    "https://suumo.jp/chintai/*",
     "https://www.athome.co.jp/chintai/tokyo/list/*",
+    "https://www.athome.co.jp/chintai/*",
     "https://airdoor.jp/list*",
-    "https://web.canary-app.jp/chintai/tokyo/list/*"
+    "https://airdoor.jp/detail/*",
+    "https://web.canary-app.jp/chintai/tokyo/list/*",
+    "https://web.canary-app.jp/chintai/rooms/*"
   ],
   "content_scripts": [
     {
@@ -19,10 +24,15 @@
         "https://www.homes.co.jp/search/condition-list/*",
         "https://www.homes.co.jp/search/condition1/*",
         "https://www.homes.co.jp/list/*",
+        "https://www.homes.co.jp/chintai/room/*",
         "https://suumo.jp/jj/chintai/ichiran/FR301FC001/*",
+        "https://suumo.jp/chintai/*",
         "https://www.athome.co.jp/chintai/tokyo/list/*",
+        "https://www.athome.co.jp/chintai/*",
         "https://airdoor.jp/list*",
-        "https://web.canary-app.jp/chintai/tokyo/list/*"
+        "https://airdoor.jp/detail/*",
+        "https://web.canary-app.jp/chintai/tokyo/list/*",
+        "https://web.canary-app.jp/chintai/rooms/*"
       ],
       "js": ["content.js"],
       "css": ["content.css"],

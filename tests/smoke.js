@@ -25,11 +25,16 @@ const requiredPatterns = [
   "const LOCAL_MIGRATION_FLAG_KEY = 'homes_local_migration_v1'",
   "const LOCAL_FILTER_STORAGE_KEY_PREFIX = 'homes_header_filter_v1'",
   "const EXPORT_FILENAME_PREFIX = 'rent-condition-notes'",
+  "id: 'homes-detail'",
   "id: 'homes-condition1'",
   "id: 'homes-condition-list'",
+  "id: 'suumo-detail'",
   "id: 'suumo-fr301fc001'",
+  "id: 'athome-detail'",
   "id: 'athome-tokyo-list'",
+  "id: 'airdoor-detail'",
   "id: 'airdoor-list'",
+  "id: 'canary-detail'",
   "id: 'canary-tokyo-list'",
   'function buildListingFingerprint',
   'function normalizeAddressText',
@@ -37,20 +42,34 @@ const requiredPatterns = [
   'function normalizeRentText',
   'function isComposingEnterKey',
   'function normalizeDetailUrl',
+  'function getCurrentDetailUrl',
+  'function getStoredDetailRecord',
+  'function getDetailPageTitle',
+  'function getDetailPageName',
   'function getLocalFilterStorageKey',
   'function normalizeListingRegistry',
   'function normalizeLinkGroupMap',
+  'function getHomesDetailListingId',
+  'function getHomesDetailLookupStorageIds',
   'function getHomesDetailUrl',
+  'function getSuumoDetailListingId',
+  'function getSuumoDetailLookupStorageIds',
   'function getSuumoDetailUrl',
+  'function getAthomeDetailListingId',
+  'function getAthomeDetailLookupStorageIds',
   'function getAthomeDetailUrl',
   'function getAthomeCanonicalListingId',
   'function getAthomeLookupStorageIds',
   'function getAthomeNextPageUrl',
+  'function getAirdoorDetailListingId',
+  'function getAirdoorDetailLookupStorageIds',
   'function getAirdoorDetailUrl',
   'function getAirdoorCanonicalListingId',
   'function getAirdoorLookupStorageIds',
   'function getAirdoorNextPageUrl',
   'function buildAirdoorPageUrl',
+  'function getCanaryDetailListingId',
+  'function getCanaryDetailLookupStorageIds',
   'function getCanaryDetailUrl',
   'function getCanaryCanonicalListingId',
   'function getCanaryLookupStorageIds',
@@ -68,6 +87,7 @@ const requiredPatterns = [
   'function renderLinkGroupListMarkup',
   'function buildDetailUrlSuggestionGroups',
   'function saveItemComment',
+  'function syncDetailPanelPosition',
   'async function applySelectedLinkIds',
   'async function applyRowLinkAction',
   'async function applyDetailUrlLink',
@@ -85,6 +105,7 @@ const requiredPatterns = [
   'data-hc-item-comment-label',
   'data-hc-edit-item-comment',
   'data-hc-item-comment-input',
+  'data-hc-detail-panel-toggle',
   'class="hc-link-url-input"',
   'data-hc-link-suggestions',
   'data-hc-link-action',
@@ -214,6 +235,18 @@ function checkRequiredPatterns() {
     throw new Error('Required modal selector is missing from content.css');
   }
 
+  if (!css.includes('.hc-detail-panel-host')) {
+    throw new Error('Required detail panel host selector is missing from content.css');
+  }
+
+  if (!css.includes('.hc-panel-detail')) {
+    throw new Error('Required detail panel selector is missing from content.css');
+  }
+
+  if (!css.includes('.hc-detail-panel-toggle')) {
+    throw new Error('Required detail panel toggle selector is missing from content.css');
+  }
+
   if (!css.includes('.hc-link-url-input')) {
     throw new Error('Required detail URL input selector is missing from content.css');
   }
@@ -298,17 +331,22 @@ function checkManifestSupport() {
 
   const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
   const homesListMatch = 'https://www.homes.co.jp/list/*';
+  const homesDetailMatch = 'https://www.homes.co.jp/chintai/room/*';
   const expectedMatch = 'https://suumo.jp/jj/chintai/ichiran/FR301FC001/*';
+  const suumoDetailMatch = 'https://suumo.jp/chintai/*';
   const athomeMatch = 'https://www.athome.co.jp/chintai/tokyo/list/*';
+  const athomeDetailMatch = 'https://www.athome.co.jp/chintai/*';
   const airdoorMatch = 'https://airdoor.jp/list*';
+  const airdoorDetailMatch = 'https://airdoor.jp/detail/*';
   const canaryMatch = 'https://web.canary-app.jp/chintai/tokyo/list/*';
+  const canaryDetailMatch = 'https://web.canary-app.jp/chintai/rooms/*';
 
   if (manifest.name !== '賃貸物件 条件一覧アシスタント') {
     throw new Error('Manifest name was not updated to the generic assistant name.');
   }
 
-  if (!manifest.description.includes('HOME\'S / SUUMO / athome / airdoor / Canary')) {
-    throw new Error('Manifest description does not mention HOME\'S / SUUMO / athome / airdoor / Canary support.');
+  if (!manifest.description.includes('一覧・詳細画面')) {
+    throw new Error('Manifest description does not mention detail page support.');
   }
 
   if (!manifest.host_permissions.includes(expectedMatch)) {
@@ -319,16 +357,36 @@ function checkManifestSupport() {
     throw new Error('Manifest host permissions do not include the HOME\'S /list/ URL.');
   }
 
+  if (!manifest.host_permissions.includes(homesDetailMatch)) {
+    throw new Error('Manifest host permissions do not include the HOME\'S detail URL.');
+  }
+
   if (!manifest.host_permissions.includes(athomeMatch)) {
     throw new Error('Manifest host permissions do not include the athome list URL.');
+  }
+
+  if (!manifest.host_permissions.includes(suumoDetailMatch)) {
+    throw new Error('Manifest host permissions do not include the SUUMO detail URL.');
+  }
+
+  if (!manifest.host_permissions.includes(athomeDetailMatch)) {
+    throw new Error('Manifest host permissions do not include the athome detail URL.');
   }
 
   if (!manifest.host_permissions.includes(airdoorMatch)) {
     throw new Error('Manifest host permissions do not include the airdoor list URL.');
   }
 
+  if (!manifest.host_permissions.includes(airdoorDetailMatch)) {
+    throw new Error('Manifest host permissions do not include the airdoor detail URL.');
+  }
+
   if (!manifest.host_permissions.includes(canaryMatch)) {
     throw new Error('Manifest host permissions do not include the Canary list URL.');
+  }
+
+  if (!manifest.host_permissions.includes(canaryDetailMatch)) {
+    throw new Error('Manifest host permissions do not include the Canary detail URL.');
   }
 
   const matches = manifest.content_scripts.flatMap(script => script.matches || []);
@@ -336,20 +394,40 @@ function checkManifestSupport() {
     throw new Error('Content script matches do not include the HOME\'S /list/ URL.');
   }
 
+  if (!matches.includes(homesDetailMatch)) {
+    throw new Error('Content script matches do not include the HOME\'S detail URL.');
+  }
+
   if (!matches.includes(expectedMatch)) {
     throw new Error('Content script matches do not include the SUUMO list URL.');
+  }
+
+  if (!matches.includes(suumoDetailMatch)) {
+    throw new Error('Content script matches do not include the SUUMO detail URL.');
   }
 
   if (!matches.includes(athomeMatch)) {
     throw new Error('Content script matches do not include the athome list URL.');
   }
 
+  if (!matches.includes(athomeDetailMatch)) {
+    throw new Error('Content script matches do not include the athome detail URL.');
+  }
+
   if (!matches.includes(airdoorMatch)) {
     throw new Error('Content script matches do not include the airdoor list URL.');
   }
 
+  if (!matches.includes(airdoorDetailMatch)) {
+    throw new Error('Content script matches do not include the airdoor detail URL.');
+  }
+
   if (!matches.includes(canaryMatch)) {
     throw new Error('Content script matches do not include the Canary list URL.');
+  }
+
+  if (!matches.includes(canaryDetailMatch)) {
+    throw new Error('Content script matches do not include the Canary detail URL.');
   }
 }
 

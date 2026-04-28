@@ -165,6 +165,82 @@
   z-index: 2;
 }
 
+.hc-detail-panel-host {
+  position: fixed;
+  top: 72px;
+  right: 16px;
+  z-index: 100000;
+  width: min(540px, calc(100vw - 32px));
+  pointer-events: none;
+}
+
+.hc-detail-panel-host > .hc-panel {
+  margin-top: 0;
+  box-shadow: 0 12px 28px rgba(15, 23, 42, .16);
+  pointer-events: auto;
+}
+
+.hc-panel-detail {
+  border-color: #cbd5e1;
+  background: rgba(248, 250, 252, .97);
+  backdrop-filter: blur(6px);
+}
+
+.hc-detail-panel-header {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.hc-detail-panel-summary-row {
+  margin-bottom: 0;
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 13px;
+}
+
+.hc-detail-panel-toggle {
+  flex: 0 0 auto;
+  padding: 4px 10px;
+  border: 1px solid #cbd5e1;
+  border-radius: 999px;
+  background: #fff;
+  color: #334155;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.hc-panel-detail .hc-item-comment-inline {
+  gap: 8px;
+}
+
+.hc-panel-detail .hc-item-comment-edit {
+  width: auto;
+  min-width: 42px;
+  padding: 0 10px;
+  font-size: 12px;
+  flex: 0 0 auto;
+}
+
+.hc-panel-detail .hc-item-comment-label {
+  max-width: min(16ch, 100%);
+}
+
+.hc-panel-detail .hc-comment {
+  font-size: 13px;
+}
+
+.hc-detail-panel-body {
+  display: grid;
+  gap: 0;
+}
+
+.hc-panel-detail[data-collapsed="1"] .hc-detail-panel-comment-row {
+  display: none;
+}
+
 .hc-panel-row {
   display: flex;
   gap: 12px;
@@ -238,6 +314,26 @@
 .hc-status-badge-gray {
   background: #9ca3af;
   color: #111827;
+}
+
+.hc-detail-panel-host.hc-color-red > .hc-panel {
+  border-color: #fca5a5;
+}
+
+.hc-detail-panel-host.hc-color-orange > .hc-panel {
+  border-color: #fdba74;
+}
+
+.hc-detail-panel-host.hc-color-green > .hc-panel {
+  border-color: #86efac;
+}
+
+.hc-detail-panel-host.hc-color-blue > .hc-panel {
+  border-color: #93c5fd;
+}
+
+.hc-detail-panel-host.hc-color-gray > .hc-panel {
+  border-color: #9ca3af;
 }
 
 .hc-item-comment-inline {
@@ -742,6 +838,14 @@
 
 body.hc-modal-open {
   overflow: clip;
+}
+
+@media (max-width: 720px) {
+  .hc-detail-panel-host {
+    left: 12px;
+    right: 12px;
+    width: auto;
+  }
 }
 
 .hc-link-summary {
